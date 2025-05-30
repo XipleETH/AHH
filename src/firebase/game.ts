@@ -246,13 +246,32 @@ export const subscribeToGameResults = (
 export const subscribeToUserTickets = (
   callback: (tickets: Ticket[]) => void
 ) => {
-  try {
-    // Primero obtenemos el usuario actual como promesa
-    getCurrentUser().then(user => {
+  console.log('[subscribeToUserTickets] Iniciando suscripción a tickets del usuario');
+  
+  // Variable para almacenar la función de unsubscribe real
+  let realUnsubscribe: (() => void) | null = null;
+  
+  // Función de unsubscribe que se devuelve inmediatamente
+  const unsubscribeWrapper = () => {
+    console.log('[subscribeToUserTickets] Limpiando suscripción');
+    if (realUnsubscribe) {
+      realUnsubscribe();
+    }
+  };
+  
+  // Configurar la suscripción de forma asíncrona
+  const setupSubscription = async () => {
+    try {
+      const user = await getCurrentUser();
+      console.log('[subscribeToUserTickets] Usuario obtenido:', user);
+      
       if (!user) {
+        console.log('[subscribeToUserTickets] No hay usuario autenticado, devolviendo array vacío');
         callback([]);
-        return () => {};
+        return;
       }
+      
+      console.log(`[subscribeToUserTickets] Configurando consulta para userId: ${user.id}`);
       
       const ticketsQuery = query(
         collection(db, TICKETS_COLLECTION),
@@ -260,41 +279,44 @@ export const subscribeToUserTickets = (
         orderBy('timestamp', 'desc')
       );
       
-      return onSnapshot(ticketsQuery, (snapshot) => {
+      // Configurar el listener real
+      realUnsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
         try {
+          console.log(`[subscribeToUserTickets] Snapshot recibido con ${snapshot.docs.length} documentos`);
+          
           const tickets = snapshot.docs.map(doc => {
             try {
-              return mapFirestoreTicket(doc);
+              const ticket = mapFirestoreTicket(doc);
+              console.log(`[subscribeToUserTickets] Ticket mapeado:`, ticket);
+              return ticket;
             } catch (error) {
-              console.error('Error mapping ticket document:', error, doc.id);
+              console.error('[subscribeToUserTickets] Error mapping ticket document:', error, doc.id);
               return null;
             }
           }).filter(ticket => ticket !== null) as Ticket[];
           
+          console.log(`[subscribeToUserTickets] Enviando ${tickets.length} tickets al callback`);
           callback(tickets);
         } catch (error) {
-          console.error('Error processing tickets snapshot:', error);
+          console.error('[subscribeToUserTickets] Error processing tickets snapshot:', error);
           callback([]);
         }
       }, (error) => {
-        console.error('Error in subscribeToUserTickets:', error);
+        console.error('[subscribeToUserTickets] Error en la suscripción:', error);
         callback([]);
       });
-    }).catch(error => {
-      console.error('Error getting current user:', error);
+      
+    } catch (error) {
+      console.error('[subscribeToUserTickets] Error configurando suscripción:', error);
       callback([]);
-      return () => {};
-    });
-    
-    // Devolver una función de unsubscribe temporal
-    return () => {
-      // Esta función será reemplazada cuando se resuelva la promesa
-    };
-  } catch (error) {
-    console.error('Error setting up user tickets subscription:', error);
-    callback([]);
-    return () => {}; // Unsubscribe no-op
-  }
+    }
+  };
+  
+  // Ejecutar la configuración
+  setupSubscription();
+  
+  // Devolver la función de unsubscribe
+  return unsubscribeWrapper;
 };
 
 // Suscribirse al estado actual del juego

@@ -12,6 +12,7 @@ import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
 import TicketTestComponent from './components/TicketTestComponent';
+import DebugComponent from './components/DebugComponent';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -203,6 +204,7 @@ function App() {
       <GameHistoryButton />
       <TicketTestComponent />
       <EmojiChat />
+      <DebugComponent />
     </div>
   );
 }
