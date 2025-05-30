@@ -20,6 +20,7 @@ export interface User {
 
 export interface Ticket {
   id: string;
+  ticketid?: string;        // ID único del ticket para identificación
   numbers: string[];
   timestamp: number;
   userId?: string;

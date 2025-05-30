@@ -149,13 +149,25 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket, gam
       };
     }
 
-    const frontendTickets = tickets.map(ticket => ({
-      id: ticket.id,
-      numbers: ticket.numbers,
-      userId: ticket.userId,
-      walletAddress: ticket.walletAddress,
-      localWinCheck: checkWin(ticket.numbers, winningNumbers)
-    }));
+    const frontendTickets = tickets.map(ticket => {
+      const winCheck = checkWin(ticket.numbers, winningNumbers);
+      console.log(`🎫 Frontend Ticket Analysis:`, {
+        id: ticket.id,
+        ticketid: ticket.ticketid,
+        numbers: ticket.numbers,
+        userId: ticket.userId,
+        walletAddress: ticket.walletAddress,
+        winCheck
+      });
+      return {
+        id: ticket.id,
+        ticketid: ticket.ticketid,
+        numbers: ticket.numbers,
+        userId: ticket.userId,
+        walletAddress: ticket.walletAddress,
+        localWinCheck: winCheck
+      };
+    });
 
     const backendWinners = {
       firstPrize: latestResult.firstPrize || [],
@@ -164,14 +176,33 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket, gam
       freePrize: latestResult.freePrize || []
     };
 
+    console.log(`🏆 Backend Winners:`, backendWinners);
+
     const mismatches = [];
     
     // Verificar cada ticket del frontend
     frontendTickets.forEach(ticket => {
-      const isInFirstPrize = backendWinners.firstPrize.some(t => t.id === ticket.id);
-      const isInSecondPrize = backendWinners.secondPrize.some(t => t.id === ticket.id);
-      const isInThirdPrize = backendWinners.thirdPrize.some(t => t.id === ticket.id);
-      const isInFreePrize = backendWinners.freePrize.some(t => t.id === ticket.id);
+      // Buscar por múltiples criterios: id, ticketid, y combinación de userId + números
+      const isInFirstPrize = backendWinners.firstPrize.some(t => 
+        t.id === ticket.id || 
+        t.ticketid === ticket.ticketid ||
+        (t.userId === ticket.userId && JSON.stringify(t.numbers) === JSON.stringify(ticket.numbers))
+      );
+      const isInSecondPrize = backendWinners.secondPrize.some(t => 
+        t.id === ticket.id || 
+        t.ticketid === ticket.ticketid ||
+        (t.userId === ticket.userId && JSON.stringify(t.numbers) === JSON.stringify(ticket.numbers))
+      );
+      const isInThirdPrize = backendWinners.thirdPrize.some(t => 
+        t.id === ticket.id || 
+        t.ticketid === ticket.ticketid ||
+        (t.userId === ticket.userId && JSON.stringify(t.numbers) === JSON.stringify(ticket.numbers))
+      );
+      const isInFreePrize = backendWinners.freePrize.some(t => 
+        t.id === ticket.id || 
+        t.ticketid === ticket.ticketid ||
+        (t.userId === ticket.userId && JSON.stringify(t.numbers) === JSON.stringify(ticket.numbers))
+      );
 
       const backendResult = isInFirstPrize ? 'firstPrize' : 
                            isInSecondPrize ? 'secondPrize' : 
@@ -183,9 +214,18 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket, gam
                             ticket.localWinCheck.thirdPrize ? 'thirdPrize' : 
                             ticket.localWinCheck.freePrize ? 'freePrize' : null;
 
+      console.log(`🔍 Ticket Comparison:`, {
+        ticketId: ticket.id,
+        ticketid: ticket.ticketid,
+        frontendResult,
+        backendResult,
+        shouldMatch: frontendResult === backendResult
+      });
+
       if (frontendResult !== backendResult) {
         mismatches.push({
           ticketId: ticket.id,
+          ticketid: ticket.ticketid,
           numbers: ticket.numbers,
           frontendResult,
           backendResult,

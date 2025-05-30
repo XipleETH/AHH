@@ -21,12 +21,32 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
 }) => {
   const [showConfetti, setShowConfetti] = useState(false);
   
-  // Verificar si el usuario actual tiene un ticket ganador
-  const userWonFirstPrize = currentUserId && firstPrize.some(ticket => ticket.userId === currentUserId);
-  const userWonSecondPrize = currentUserId && secondPrize.some(ticket => ticket.userId === currentUserId);
-  const userWonThirdPrize = currentUserId && thirdPrize.some(ticket => ticket.userId === currentUserId);
-  const userWonFreePrize = currentUserId && freePrize.some(ticket => ticket.userId === currentUserId);
+  // Función mejorada para verificar si un ticket pertenece al usuario
+  const isUserTicket = (ticket: Ticket) => {
+    if (!currentUserId) return false;
+    
+    // Comparar usando múltiples criterios para mayor precisión
+    return ticket.userId === currentUserId || 
+           ticket.walletAddress === currentUserId ||
+           (ticket.ticketid && ticket.ticketid.includes(currentUserId.slice(-6)));
+  };
   
+  // Verificar si el usuario actual tiene un ticket ganador usando la función mejorada
+  const userWonFirstPrize = firstPrize.some(isUserTicket);
+  const userWonSecondPrize = secondPrize.some(isUserTicket);
+  const userWonThirdPrize = thirdPrize.some(isUserTicket);
+  const userWonFreePrize = freePrize.some(isUserTicket);
+  
+  // Log para debug
+  console.log('🏆 WinnerAnnouncement Debug:', {
+    currentUserId,
+    firstPrize: firstPrize.map(t => ({ id: t.id, ticketid: t.ticketid, userId: t.userId, walletAddress: t.walletAddress })),
+    userWonFirstPrize,
+    userWonSecondPrize,
+    userWonThirdPrize,
+    userWonFreePrize
+  });
+
   // Mostrar confeti si el usuario ha ganado
   useEffect(() => {
     if (userWonFirstPrize || userWonSecondPrize || userWonThirdPrize || userWonFreePrize) {
@@ -87,10 +107,10 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
                 {firstPrize.map(ticket => (
                   <div 
                     key={ticket.id}
-                    className={`p-2 rounded ${ticket.userId === currentUserId ? 'bg-yellow-200 font-bold' : 'bg-gray-50'}`}
+                    className={`p-2 rounded ${isUserTicket(ticket) ? 'bg-yellow-200 font-bold' : 'bg-gray-50'}`}
                   >
                     {ticket.numbers.join(' ')}
-                    {ticket.userId === currentUserId && ' (¡TÚ!)'}
+                    {isUserTicket(ticket) && ' (¡TÚ!)'}
                   </div>
                 ))}
               </div>
@@ -109,10 +129,10 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
                 {secondPrize.map(ticket => (
                   <div 
                     key={ticket.id}
-                    className={`p-2 rounded ${ticket.userId === currentUserId ? 'bg-gray-300 font-bold' : 'bg-gray-50'}`}
+                    className={`p-2 rounded ${isUserTicket(ticket) ? 'bg-gray-300 font-bold' : 'bg-gray-50'}`}
                   >
                     {ticket.numbers.join(' ')}
-                    {ticket.userId === currentUserId && ' (¡TÚ!)'}
+                    {isUserTicket(ticket) && ' (¡TÚ!)'}
                   </div>
                 ))}
               </div>
@@ -131,10 +151,10 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
                 {thirdPrize.map(ticket => (
                   <div 
                     key={ticket.id}
-                    className={`p-2 rounded ${ticket.userId === currentUserId ? 'bg-orange-200 font-bold' : 'bg-gray-50'}`}
+                    className={`p-2 rounded ${isUserTicket(ticket) ? 'bg-orange-200 font-bold' : 'bg-gray-50'}`}
                   >
                     {ticket.numbers.join(' ')}
-                    {ticket.userId === currentUserId && ' (¡TÚ!)'}
+                    {isUserTicket(ticket) && ' (¡TÚ!)'}
                   </div>
                 ))}
               </div>
@@ -153,10 +173,10 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
                 {freePrize.map(ticket => (
                   <div 
                     key={ticket.id}
-                    className={`p-2 rounded ${ticket.userId === currentUserId ? 'bg-blue-200 font-bold' : 'bg-gray-50'}`}
+                    className={`p-2 rounded ${isUserTicket(ticket) ? 'bg-blue-200 font-bold' : 'bg-gray-50'}`}
                   >
                     {ticket.numbers.join(' ')}
-                    {ticket.userId === currentUserId && ' (¡TÚ!)'}
+                    {isUserTicket(ticket) && ' (¡TÚ!)'}
                   </div>
                 ))}
               </div>

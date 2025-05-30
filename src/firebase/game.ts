@@ -40,9 +40,11 @@ const mapFirestoreTicket = (doc: any): Ticket => {
   const data = doc.data();
   return {
     id: doc.id,
+    ticketid: data.ticketid || doc.id, // Usar ticketid si existe, sino usar doc.id
     numbers: data.numbers || [],
     timestamp: data.timestamp?.toMillis() || Date.now(),
-    userId: data.userId
+    userId: data.userId,
+    walletAddress: data.walletAddress
   };
 };
 
@@ -57,24 +59,30 @@ export const generateTicket = async (numbers: string[], walletAddress: string): 
       return null;
     }
     
+    // Generar ticketid único
+    const ticketid = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     // Crear el ticket data usando SOLO la wallet address
     const ticketData = {
+      ticketid: ticketid, // ID único del ticket
       numbers,
       timestamp: serverTimestamp(),
       userId: walletAddress, // Usar wallet address como userId
       walletAddress: walletAddress,
-      username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`
+      username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
+      createdAt: new Date().toISOString()
     };
     
     console.log('📝 Guardando ticket en Firebase...', { ticketData });
     
     const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
     
-    console.log(`✅ Ticket creado con ID: ${ticketRef.id} para wallet ${walletAddress}`);
+    console.log(`✅ Ticket creado con ID: ${ticketRef.id} y ticketid: ${ticketid} para wallet ${walletAddress}`);
     
     // Devolver el ticket creado
     return {
       id: ticketRef.id,
+      ticketid: ticketid,
       numbers,
       timestamp: Date.now(),
       userId: walletAddress,

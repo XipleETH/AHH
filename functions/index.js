@@ -269,27 +269,35 @@ const processGameDraw = async () => {
       minuteKey: currentMinute, // Guardar la clave del minuto para facilitar la verificación
       firstPrize: results.firstPrize.map(ticket => ({
         id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id, // Incluir ticketid
         numbers: ticket.numbers,
         timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId // Incluir wallet address
       })),
       secondPrize: results.secondPrize.map(ticket => ({
         id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id, // Incluir ticketid
         numbers: ticket.numbers,
         timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId // Incluir wallet address
       })),
       thirdPrize: results.thirdPrize.map(ticket => ({
         id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id, // Incluir ticketid
         numbers: ticket.numbers,
         timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId // Incluir wallet address
       })),
       freePrize: results.freePrize.map(ticket => ({
         id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id, // Incluir ticketid
         numbers: ticket.numbers,
         timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId // Incluir wallet address
       }))
     };
     
