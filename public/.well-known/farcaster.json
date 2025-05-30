@@ -1,40 +1,16 @@
 {  
   "accountAssociation": {
-    "header": "eyJmaWQiOjM1ODIzNiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGEyMGU3MGE0RDJGRTZkOUI3MTFFNDI3OTRDNWIwZmQyMjU2YzMyNGUifQ",
-    "payload": "eyJkb21haW4iOiJsb3R0b21vamlmdW4udmVyY2VsLmFwcCJ9",
-    "signature": "MHgzNjA0MmQxYzRhZWU2NmEyNjhiMzdlY2YyN2RiY2I2MDdhZTRkOGI0MTY5NzA1NjdlMmU0ZGUwMDhiNTA0NGE2MjVjOGJjNzZiYThkMjdkNDU4M2VmMjQ0OTU1YmUyOWUzYTY5YjUyMDUwMWM5NTRlZDhmNWE1MTU1MTFiZDEyYzFj"
+    "header": "eyJmaWQiOjQ2MTAzNSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDMzQTMzQjA2RTJBZUVEQWRCMTM5NWNkRDcwOWQ1QjMxRjU0M0Q0NTEifQ",
+    "payload": "eyJkb21haW4iOiJsb3R0b21vamkudmVyY2VsLmFwcCJ9",
+    "signature": "MHhiNTJjNDJhNzc0NWZkYzEyNTU4OWQwOGZiZGQzZjA0MGQ1ZjQ0YTJmMTNjZTU4ZDdlYTc4NjhkMzMwMTFkNzg2NjNkMGJjY2Y5ZjE4YWU5MzA2ZTI1ZGM1YjFmOWQ5YTFkNzU1YTEyYmU5ZDcwZWFiOWY4ZmU0YWJjNzdjZTEwMDFi"
   },
 
   "frame": {
-    "version": "1",
     "name": "LottoMoji",
-    "iconUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
-    "splashImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
-    "splashBackgroundColor": "#8B5CF6",
-    "homeUrl": "https://lottomojifun.vercel.app",
-    "webhookUrl": "https://lottomojifun.vercel.app/api/webhook",
-    "subtitle": "Match emojis to win! Exclusive for Farcaster users",
-    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck! Only available for Farcaster Warpcast users.",
-    "requiresLogin": true,
-    "screenshotUrls": [
-      "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
-    ],
-    "primaryCategory": "games",
-    "tags": [
-      "lottery",
-      "games",
-      "emoji",
-      "prizes",
-      "fun",
-      "farcaster",
-      "warpcast",
-      "web3"
-    ],
-    "heroImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
-    "tagline": "Match emojis, win prizes! Farcaster exclusive lottery",
-    "ogTitle": "LottoMoji - Emoji Lottery Game for Farcaster",
-    "ogDescription": "Play the exciting emoji-based lottery game exclusively for Farcaster users. Match 4 emojis to win amazing prizes!",
-    "ogImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
+    "iconUrl": "https://lottomoji.vercel.app/logo.png",
+    "homeUrl": "https://lottomoji.vercel.app",
+    "imageUrl": "https://lottomoji.vercel.app/splash.png",
+    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate tickets and test your luck! Connect your Coinbase Wallet to play."
   },
 
   "miniApp": {

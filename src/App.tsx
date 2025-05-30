@@ -9,11 +9,6 @@ import { useGameState } from './hooks/useGameState';
 import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
-import TicketTestComponent from './components/TicketTestComponent';
-import DebugComponent from './components/DebugComponent';
-import WalletDebugComponent from './components/WalletDebugComponent';
-import ChatTestComponent from './components/ChatTestComponent';
-import WinnerVerificationComponent from './components/WinnerVerificationComponent';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -27,7 +22,6 @@ function App() {
     isBaseNetwork,
     switchToBase 
   } = useAuth();
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const hasTriedSignIn = useRef(false);
   
   // Para evitar renderizado constante
@@ -69,8 +63,8 @@ function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
-          <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji 🎲</h1>
-          <p className="text-white text-xl mb-6">¡Bienvenido al juego de lotería de emojis!</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4 text-center">🎰 LottoMoji 🎲</h1>
+          <p className="text-white text-lg sm:text-xl mb-6">¡Bienvenido al juego de lotería de emojis!</p>
           <p className="text-white/80 mb-6">
             Conecta tu billetera Coinbase para empezar a jugar y generar tickets con tus emojis favoritos.
           </p>
@@ -90,10 +84,6 @@ function App() {
             </button>
           </div>
         </div>
-        {/* Debug components para la pantalla de bienvenida también */}
-        <WalletDebugComponent />
-        <ChatTestComponent />
-        <WinnerVerificationComponent />
       </div>
     );
   }
@@ -101,17 +91,20 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl md:text-6xl font-bold text-white">
-            🎰 LottoMoji 🎲
-          </h1>
-          <div className="flex items-center gap-2">
+        {/* Header mejorado para móvil */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+          <div className="text-center sm:text-left">
+            <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-white">
+              🎰 LottoMoji 🎲
+            </h1>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             {user && (
               <div className="bg-white/20 px-4 py-2 rounded-lg text-white flex items-center">
                 <UserCircle className="mr-2" size={18} />
-                <span>{user.username}</span>
+                <span className="text-sm sm:text-base">{user.username}</span>
                 {walletAddress && (
-                  <div className="ml-2 flex items-center text-sm text-white/70">
+                  <div className="ml-2 flex items-center text-xs sm:text-sm text-white/70">
                     <WalletIcon size={12} className="mr-1" />
                     <span>{walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}</span>
                   </div>
@@ -121,7 +114,7 @@ function App() {
             {!walletConnected && (
               <button
                 onClick={() => connectWallet()}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm sm:text-base"
               >
                 <WalletIcon size={16} />
                 Conectar Wallet
@@ -145,12 +138,14 @@ function App() {
           </div>
         )}
         
-        <p className="text-white/90 text-xl mb-4">
-          Match 4 emojis to win! 🏆
-        </p>
-        <p className="text-white/80">Next draw in:</p>
-        <div className="flex justify-center mt-4">
-          <Timer seconds={gameState.timeRemaining} />
+        <div className="text-center mb-6">
+          <p className="text-white/90 text-lg sm:text-xl mb-4">
+            Match 4 emojis to win! 🏆
+          </p>
+          <p className="text-white/80">Next draw in:</p>
+          <div className="flex justify-center mt-4">
+            <Timer seconds={gameState.timeRemaining} />
+          </div>
         </div>
 
         <WinnerAnnouncement 
@@ -162,6 +157,7 @@ function App() {
           currentUserId={user?.id}
         />
 
+        {/* Botón de sorteo solo en desarrollo */}
         {import.meta.env.DEV && (
           <div className="flex justify-center gap-4 mb-6">
             <button
@@ -175,9 +171,9 @@ function App() {
 
         <TicketGenerator
           onGenerateTicket={generateTicket}
-          disabled={gameState.tickets.length >= 10}
+          disabled={false} // Sin límite de tickets
           ticketCount={gameState.tickets.length}
-          maxTickets={10}
+          maxTickets={999} // Número alto para mostrar
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -195,13 +191,10 @@ function App() {
           ))}
         </div>
       </div>
+      
+      {/* Solo mantener componentes esenciales */}
       <GameHistoryButton />
-      <TicketTestComponent />
       <EmojiChat />
-      <DebugComponent />
-      <WalletDebugComponent />
-      <ChatTestComponent />
-      <WinnerVerificationComponent />
     </div>
   );
 }
