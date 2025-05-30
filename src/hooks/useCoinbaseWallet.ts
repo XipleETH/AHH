@@ -31,6 +31,16 @@ export interface CoinbaseWalletState {
   error: Error | null;
 }
 
+// Función para detectar si Coinbase Wallet está instalada
+const isCoinbaseWalletInstalled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  return !!(
+    window.ethereum?.isCoinbaseWallet ||
+    window.coinbaseWalletExtension
+  );
+};
+
 export const useCoinbaseWallet = (): CoinbaseWalletState => {
   const { address, isConnected, isReconnecting } = useAccount();
   const { connect: wagmiConnect, connectors, isPending: isConnecting, error } = useConnect();
@@ -72,17 +82,45 @@ export const useCoinbaseWallet = (): CoinbaseWalletState => {
   const connect = useCallback(async () => {
     try {
       console.log('🔌 Iniciando conexión con Coinbase Wallet...');
+      console.log('💡 Coinbase Wallet instalada:', isCoinbaseWalletInstalled());
       
-      // Buscar el conector de Coinbase Wallet
-      const coinbaseConnector = connectors.find(
-        connector => connector.name === 'Coinbase Wallet'
+      // Buscar el mejor conector disponible
+      let targetConnector = null;
+      
+      // 1. Primero buscar el injected de Coinbase (extensión del navegador)
+      const coinbaseInjected = connectors.find(
+        connector => connector.id === 'injected' && connector.name.includes('Coinbase')
       );
       
-      if (!coinbaseConnector) {
-        throw new Error('Conector de Coinbase Wallet no encontrado');
+      // 2. Si no, buscar el conector oficial de Coinbase Wallet
+      const coinbaseWallet = connectors.find(
+        connector => connector.id === 'coinbaseWalletSDK' || connector.name === 'Coinbase Wallet'
+      );
+      
+      // 3. Como último recurso, cualquier conector injected
+      const anyInjected = connectors.find(
+        connector => connector.id === 'injected'
+      );
+      
+      // Priorizar en este orden
+      if (isCoinbaseWalletInstalled() && coinbaseInjected) {
+        targetConnector = coinbaseInjected;
+        console.log('🎯 Usando conector injected de Coinbase Wallet');
+      } else if (coinbaseWallet) {
+        targetConnector = coinbaseWallet;
+        console.log('🎯 Usando conector oficial de Coinbase Wallet');
+      } else if (anyInjected) {
+        targetConnector = anyInjected;
+        console.log('🎯 Usando conector injected genérico');
       }
       
-      await wagmiConnect({ connector: coinbaseConnector });
+      if (!targetConnector) {
+        throw new Error('No se encontró un conector compatible de Coinbase Wallet');
+      }
+      
+      console.log('🔗 Conectando con:', targetConnector.name, targetConnector.id);
+      
+      await wagmiConnect({ connector: targetConnector });
       console.log('✅ Conectado con Coinbase Wallet exitosamente');
     } catch (error) {
       console.error('❌ Error conectando con Coinbase Wallet:', error);
