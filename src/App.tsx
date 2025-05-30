@@ -25,7 +25,7 @@ function App() {
   } = useAuth();
   
   // Pasar walletAddress al hook de game state
-  const { gameState, generateTicket, forceGameDraw } = useGameState(walletAddress);
+  const { gameState, generateTicket, forceGameDraw, setGameState } = useGameState(walletAddress);
   const hasTriedSignIn = useRef(false);
   
   // Para evitar renderizado constante
@@ -207,7 +207,7 @@ function App() {
       <EmojiChat />
       
       {/* Componente de diagnóstico de tickets */}
-      <TicketDiagnostic generateTicket={generateTicket} />
+      <TicketDiagnostic generateTicket={generateTicket} gameState={gameState} setGameState={setGameState} />
       
       {/* Componente de debug solo en desarrollo */}
       {import.meta.env.DEV && <DebugGameResults />}

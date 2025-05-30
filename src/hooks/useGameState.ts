@@ -180,6 +180,7 @@ export function useGameState(walletAddress?: string | null) {
       timeRemaining
     },
     generateTicket,
-    forceGameDraw
+    forceGameDraw,
+    setGameState
   };
 }

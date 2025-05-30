@@ -7,17 +7,22 @@ import { GameResult, Ticket } from '../types';
 
 interface TicketDiagnosticProps {
   generateTicket: (numbers: string[]) => Promise<void>;
+  gameState: any;
+  setGameState: (updater: (prev: any) => any) => void;
 }
 
-const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) => {
+const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket, gameState: externalGameState, setGameState }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const { gameState } = useGameState();
   const { user } = useAuth();
 
-  const tickets = gameState.tickets || [];
-  const winningNumbers = gameState.winningNumbers || [];
-  const latestResult = gameState.lastResults;
+  // Usar el gameState externo si está disponible, sino el interno
+  const currentGameState = externalGameState || gameState;
+
+  const tickets = currentGameState.tickets || [];
+  const winningNumbers = currentGameState.winningNumbers || [];
+  const latestResult = currentGameState.lastResults;
 
   const calculateProbabilities = () => {
     const totalEmojis = EMOJIS.length; // 25 emojis
@@ -431,6 +436,63 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) =
     }
   };
 
+  // FUNCIÓN DE EMERGENCIA - SIMULAR GANADORES DIRECTAMENTE
+  const forceWinnersNow = () => {
+    if (tickets.length === 0) {
+      alert('Genera al menos 1 ticket primero');
+      return;
+    }
+
+    // Tomar los primeros tickets y convertirlos en ganadores
+    const mockWinningNumbers = ['🌟', '🎈', '🎨', '🌈'];
+    const mockResults = {
+      firstPrize: tickets.slice(0, 1).map(t => ({ ...t, numbers: mockWinningNumbers })),
+      secondPrize: tickets.slice(1, 2).map(t => ({ ...t, numbers: [mockWinningNumbers[0], mockWinningNumbers[2], mockWinningNumbers[1], mockWinningNumbers[3]] })),
+      thirdPrize: tickets.slice(2, 3).map(t => ({ ...t, numbers: [mockWinningNumbers[0], mockWinningNumbers[1], mockWinningNumbers[2], '🍭'] })),
+      freePrize: tickets.slice(3, 4).map(t => ({ ...t, numbers: [mockWinningNumbers[1], mockWinningNumbers[0], mockWinningNumbers[2], '🎪'] }))
+    };
+
+    // Actualizar el estado directamente para mostrar ganadores
+    setGameState(prev => ({
+      ...prev,
+      winningNumbers: mockWinningNumbers,
+      lastResults: mockResults
+    }));
+
+    alert('✅ GANADORES FORZADOS EXITOSAMENTE!\n\nVe a la página principal para ver el anuncio de ganadores.');
+  };
+
+  // FUNCIÓN SIMPLE - CREAR TICKET GANADOR DIRECTO
+  const createInstantWinner = async (prizeType: string) => {
+    const winningNums = ['🌟', '🎈', '🎨', '🌈'];
+    let ticketNums = [];
+
+    switch(prizeType) {
+      case 'first': ticketNums = [...winningNums]; break;
+      case 'second': ticketNums = [winningNums[1], winningNums[0], winningNums[3], winningNums[2]]; break;  
+      case 'third': ticketNums = [winningNums[0], winningNums[1], winningNums[2], '🍭']; break;
+      case 'free': ticketNums = [winningNums[1], winningNums[0], winningNums[2], '🎪']; break;
+    }
+
+    await generateTicket(ticketNums);
+    
+    // Después de 2 segundos, forzar los resultados
+    setTimeout(() => {
+      setGameState(prev => ({
+        ...prev,
+        winningNumbers: winningNums,
+        lastResults: {
+          firstPrize: prizeType === 'first' ? [{ id: 'temp', numbers: ticketNums, userId: 'you', timestamp: Date.now() }] : [],
+          secondPrize: prizeType === 'second' ? [{ id: 'temp', numbers: ticketNums, userId: 'you', timestamp: Date.now() }] : [],
+          thirdPrize: prizeType === 'third' ? [{ id: 'temp', numbers: ticketNums, userId: 'you', timestamp: Date.now() }] : [],
+          freePrize: prizeType === 'free' ? [{ id: 'temp', numbers: ticketNums, userId: 'you', timestamp: Date.now() }] : []
+        }
+      }));
+    }, 2000);
+
+    alert(`Ticket ${prizeType} creado y será ganador en 2 segundos!`);
+  };
+
   if (!isOpen) {
     return (
       <button
@@ -726,16 +788,31 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) =
                 </h3>
                 
                 {/* Botón de Solución Rápida */}
-                <div className="mb-4">
+                <div className="mb-4 space-y-2">
                   <button
-                    onClick={quickFixProduction}
+                    onClick={forceWinnersNow}
                     className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold text-lg"
                   >
-                    🚀 SOLUCIÓN RÁPIDA - GENERAR GANADORES AHORA
+                    🚀 FORZAR GANADORES AHORA (GARANTIZADO)
                   </button>
-                  <p className="text-xs text-gray-600 mt-1 text-center">
-                    Genera tickets ganadores garantizados para probar el sistema
+                  <p className="text-xs text-gray-600 text-center">
+                    Convierte tus tickets existentes en ganadores inmediatamente
                   </p>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => createInstantWinner('first')}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded font-bold text-sm"
+                    >
+                      🏆 PRIMER PREMIO YA
+                    </button>
+                    <button
+                      onClick={() => createInstantWinner('second')}
+                      className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded font-bold text-sm"
+                    >
+                      🥈 SEGUNDO PREMIO YA
+                    </button>
+                  </div>
                 </div>
 
                 {/* Diagnóstico de Problemas */}
