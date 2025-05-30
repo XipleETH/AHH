@@ -6,63 +6,52 @@ import {
 } from 'firebase/auth';
 import { User } from '../types';
 
-// Convertir usuario de Firebase a nuestro tipo de usuario
-const mapFirebaseUser = (user: FirebaseUser | null): User | null => {
-  if (!user) return null;
-  
-  return {
-    id: user.uid,
-    username: user.displayName || `User-${user.uid.substring(0, 8)}`,
-    avatar: user.photoURL || undefined,
-    walletAddress: undefined // Se establecerá cuando se conecte la wallet
-  };
-};
-
 // Estado global del usuario actual
 let currentUser: User | null = null;
 
-// Función para crear un usuario basado en una dirección de wallet
-export const createWalletUser = (walletAddress: string): User => {
-  const walletUser: User = {
-    id: `wallet-${walletAddress}`,
-    username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
+// Convertir usuario de Firebase a nuestro tipo de usuario
+const mapFirebaseUser = (user: FirebaseUser | null, walletAddress?: string): User | null => {
+  if (!user) return null;
+  
+  return {
+    id: user.uid, // SIEMPRE usar el UID de Firebase como ID consistente
+    username: walletAddress 
+      ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`
+      : `User-${user.uid.substring(0, 8)}`,
+    avatar: user.photoURL || undefined,
     walletAddress: walletAddress
   };
-  
-  console.log('👤 Usuario de wallet creado:', walletUser);
-  currentUser = walletUser;
-  return walletUser;
 };
 
 // Función para obtener el usuario actual
 export const getCurrentUser = async (): Promise<User | null> => {
-  // Si ya tenemos un usuario de wallet en memoria, devolverlo
-  if (currentUser && currentUser.walletAddress) {
-    return currentUser;
-  }
+  console.log('🔍 getCurrentUser llamado, currentUser:', currentUser);
   
-  // Si tenemos un usuario de Firebase pero sin wallet, mantenerlo
+  // Si ya tenemos un usuario en memoria, devolverlo
   if (currentUser) {
+    console.log('✅ Devolviendo usuario en memoria:', currentUser);
     return currentUser;
   }
   
-  // Si no hay usuario en Firebase, crear uno anónimo
+  // Si no hay usuario de Firebase autenticado, crear uno anónimo
   if (!auth.currentUser) {
     try {
-      console.log('🔑 Creando usuario anónimo...');
+      console.log('🔑 Creando usuario anónimo de Firebase...');
       const result = await signInAnonymously(auth);
       const user = mapFirebaseUser(result.user);
       currentUser = user;
+      console.log('✅ Usuario anónimo creado:', user);
       return user;
     } catch (error) {
-      console.error('Error creando usuario anónimo:', error);
+      console.error('❌ Error creando usuario anónimo:', error);
       return null;
     }
   }
   
   // Mapear el usuario de Firebase existente
-  const user = mapFirebaseUser(auth.currentUser);
+  const user = mapFirebaseUser(auth.currentUser, currentUser?.walletAddress);
   currentUser = user;
+  console.log('✅ Usuario de Firebase mapeado:', user);
   return user;
 };
 
@@ -72,7 +61,7 @@ export const signIn = async (): Promise<User | null> => {
     console.log('🔑 Iniciando sesión...');
     return await getCurrentUser();
   } catch (error) {
-    console.error('Error en inicio de sesión:', error);
+    console.error('❌ Error en inicio de sesión:', error);
     return null;
   }
 };
@@ -82,16 +71,15 @@ export const updateUserWallet = (walletAddress: string): void => {
   console.log('🔄 Actualizando wallet del usuario:', walletAddress);
   
   if (currentUser) {
-    // Actualizar el usuario existente con la nueva wallet
+    // Mantener el mismo ID de Firebase, solo actualizar la wallet y username
     currentUser = {
       ...currentUser,
-      id: `wallet-${walletAddress}`, // Cambiar ID para que sea basado en wallet
       walletAddress,
       username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`
     };
-  } else {
-    // Crear un nuevo usuario basado en la wallet
-    currentUser = createWalletUser(walletAddress);
+  } else if (auth.currentUser) {
+    // Si hay un usuario de Firebase pero no en memoria, mapearlo con la wallet
+    currentUser = mapFirebaseUser(auth.currentUser, walletAddress);
   }
   
   console.log('✅ Usuario actualizado con wallet:', currentUser);
@@ -101,13 +89,13 @@ export const updateUserWallet = (walletAddress: string): void => {
 export const clearUserWallet = (): void => {
   console.log('🧹 Limpiando wallet del usuario');
   
-  if (currentUser && currentUser.walletAddress) {
-    // Si el usuario tenía una wallet, volver al estado de Firebase
-    if (auth.currentUser) {
-      currentUser = mapFirebaseUser(auth.currentUser);
-    } else {
-      currentUser = null;
-    }
+  if (currentUser) {
+    // Mantener el usuario pero quitar la wallet
+    currentUser = {
+      ...currentUser,
+      walletAddress: undefined,
+      username: `User-${currentUser.id.substring(0, 8)}`
+    };
   }
   
   console.log('✅ Wallet limpiada, usuario actual:', currentUser);
@@ -120,8 +108,18 @@ export const signOut = async (): Promise<void> => {
     currentUser = null;
     console.log('🚪 Sesión cerrada');
   } catch (error) {
-    console.error('Error cerrando sesión:', error);
+    console.error('❌ Error cerrando sesión:', error);
   }
+};
+
+// Función para crear un usuario basado en una dirección de wallet (legacy)
+export const createWalletUser = (walletAddress: string): User => {
+  console.warn('⚠️ createWalletUser está deprecated, usando Firebase Auth en su lugar');
+  return getCurrentUser().then(user => user || {
+    id: 'anonymous',
+    username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
+    walletAddress: walletAddress
+  }) as any;
 };
 
 // Función para obtener el usuario por dirección de wallet (para tickets)
@@ -131,9 +129,10 @@ export const getUserByWallet = (walletAddress: string): User => {
     return currentUser;
   }
   
-  // Si no, crear un usuario temporal basado en la wallet
+  // Si no, devolver un usuario genérico (esto no debería pasar en la implementación actual)
+  console.warn('⚠️ getUserByWallet llamado para wallet no actual:', walletAddress);
   return {
-    id: `wallet-${walletAddress}`,
+    id: 'unknown',
     username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
     walletAddress: walletAddress
   };
@@ -145,17 +144,18 @@ export const onAuthStateChanged = (callback: (user: User | null) => void) => {
   const handleAuthChange = (firebaseUser: FirebaseUser | null) => {
     console.log('🔄 Firebase auth state changed:', firebaseUser?.uid);
     
-    // Si tenemos un usuario con wallet, mantenerlo
-    if (currentUser && currentUser.walletAddress) {
-      console.log('👤 Manteniendo usuario con wallet:', currentUser);
-      callback(currentUser);
-      return;
+    if (firebaseUser) {
+      // Mantener la wallet actual si existe
+      const walletAddress = currentUser?.walletAddress;
+      const user = mapFirebaseUser(firebaseUser, walletAddress);
+      currentUser = user;
+      console.log('👤 Usuario actualizado por Firebase Auth:', user);
+      callback(user);
+    } else {
+      currentUser = null;
+      console.log('👤 Usuario desconectado');
+      callback(null);
     }
-    
-    // Si no hay wallet, usar el usuario de Firebase
-    const user = mapFirebaseUser(firebaseUser);
-    currentUser = user;
-    callback(user);
   };
   
   return onFirebaseAuthStateChanged(auth, handleAuthChange);
