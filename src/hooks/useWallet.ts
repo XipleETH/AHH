@@ -1,115 +1,104 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../components/AuthProvider';
-import { connectWallet, getTokenBalance, getUserNFTs, buyTickets, claimPrizes } from '../utils/contract';
+import { useCoinbaseWallet } from './useCoinbaseWallet';
 
-export const useWallet = () => {
-  const { user } = useAuth();
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [tokenBalance, setTokenBalance] = useState<string | null>(null);
+export interface WalletState {
+  isConnected: boolean;
+  isConnecting: boolean;
+  address: string | undefined;
+  tokenBalance: string | undefined;
+  nfts: string[] | undefined;
+  lastTransaction: string | undefined;
+  isPendingTransaction: boolean;
+  chainId: number | undefined;
+  isBaseNetwork: boolean;
+  networkName: string;
+  connectWallet: () => Promise<void>;
+  refreshWalletData: () => Promise<void>;
+}
+
+export const useWallet = (): WalletState => {
+  const { connectWallet: authConnectWallet, walletAddress, walletBalance } = useAuth();
+  const {
+    isConnected,
+    isConnecting,
+    address,
+    balance,
+    chainId,
+    isBaseNetwork,
+    networkName,
+    connect
+  } = useCoinbaseWallet();
+
+  const [tokenBalance, setTokenBalance] = useState<string | undefined>();
   const [nfts, setNfts] = useState<string[]>([]);
-  const [lastTransaction, setLastTransaction] = useState<string | null>(null);
+  const [lastTransaction, setLastTransaction] = useState<string | undefined>();
   const [isPendingTransaction, setIsPendingTransaction] = useState(false);
 
-  // Intentar conectar automáticamente si hay usuario de Farcaster
+  // Sincronizar con el balance de wallet
   useEffect(() => {
-    if (user?.isFarcasterUser && user?.walletAddress && !isConnected && !isConnecting) {
-      handleConnect();
-    }
-  }, [user, isConnected, isConnecting]);
-
-  // Cargar información de tokens si está conectado
-  useEffect(() => {
-    if (isConnected && user) {
-      loadUserWalletData();
-    }
-  }, [isConnected, user]);
-
-  // Conectar billetera
-  const handleConnect = async () => {
-    if (!user) return;
-    
-    try {
-      setIsConnecting(true);
-      const success = await connectWallet(user);
-      setIsConnected(success);
-    } catch (error) {
-      console.error('Error al conectar billetera:', error);
-      setIsConnected(false);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  // Cargar datos de la billetera del usuario
-  const loadUserWalletData = async () => {
-    if (!user) return;
-    
-    try {
-      // Obtener balance de tokens
-      const balance = await getTokenBalance(user);
+    if (walletBalance) {
+      setTokenBalance(walletBalance);
+    } else if (balance) {
       setTokenBalance(balance);
-      
-      // Obtener NFTs del usuario
-      const userNfts = await getUserNFTs(user);
-      setNfts(userNfts);
-    } catch (error) {
-      console.error('Error al cargar datos de billetera:', error);
     }
-  };
+  }, [walletBalance, balance]);
 
-  // Comprar tickets
-  const handleBuyTickets = async (ticketCount: number) => {
-    if (!user || !isConnected) return null;
-    
+  // Función para conectar wallet
+  const connectWallet = useCallback(async () => {
+    try {
+      await authConnectWallet();
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      throw error;
+    }
+  }, [authConnectWallet]);
+
+  // Función para refrescar datos de wallet
+  const refreshWalletData = useCallback(async () => {
+    if (!address) return;
+
     try {
       setIsPendingTransaction(true);
-      const txHash = await buyTickets(user, ticketCount);
-      setLastTransaction(txHash);
       
-      // Recargar balance después de la transacción
-      await loadUserWalletData();
+      // Aquí podrías agregar llamadas para obtener:
+      // - Balance de tokens personalizados
+      // - NFTs del usuario
+      // - Historial de transacciones
       
-      return txHash;
+      console.log('📊 Refrescando datos de wallet para:', address);
+      
+      // Simular actualización de datos
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('✅ Datos de wallet actualizados');
     } catch (error) {
-      console.error('Error al comprar tickets:', error);
-      return null;
+      console.error('❌ Error refreshing wallet data:', error);
+      throw error;
     } finally {
       setIsPendingTransaction(false);
     }
-  };
+  }, [address]);
 
-  // Reclamar premios
-  const handleClaimPrizes = async (ticketIds: string[]) => {
-    if (!user || !isConnected) return null;
-    
-    try {
-      setIsPendingTransaction(true);
-      const txHash = await claimPrizes(user, ticketIds);
-      setLastTransaction(txHash);
-      
-      // Recargar balance después de la transacción
-      await loadUserWalletData();
-      
-      return txHash;
-    } catch (error) {
-      console.error('Error al reclamar premios:', error);
-      return null;
-    } finally {
-      setIsPendingTransaction(false);
+  // Auto-refresh cuando cambia la dirección
+  useEffect(() => {
+    if (address && isConnected) {
+      refreshWalletData();
     }
-  };
+  }, [address, isConnected, refreshWalletData]);
 
   return {
     isConnected,
     isConnecting,
+    address: address || walletAddress,
     tokenBalance,
     nfts,
     lastTransaction,
     isPendingTransaction,
-    connectWallet: handleConnect,
-    buyTickets: handleBuyTickets,
-    claimPrizes: handleClaimPrizes,
-    refreshWalletData: loadUserWalletData
+    chainId,
+    isBaseNetwork,
+    networkName,
+    connectWallet,
+    refreshWalletData
   };
 }; 

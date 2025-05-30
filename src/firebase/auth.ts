@@ -4,8 +4,7 @@ import {
   onAuthStateChanged as onFirebaseAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { User, FarcasterProfile } from '../types';
-import { sdk } from '@farcaster/frame-sdk';
+import { User } from '../types';
 
 // Convertir usuario de Firebase a nuestro tipo de usuario
 const mapFirebaseUser = (user: FirebaseUser | null): User | null => {
@@ -13,164 +12,151 @@ const mapFirebaseUser = (user: FirebaseUser | null): User | null => {
   
   return {
     id: user.uid,
-    username: user.displayName || `User-${user.uid.substring(0, 5)}`,
+    username: user.displayName || `User-${user.uid.substring(0, 8)}`,
     avatar: user.photoURL || undefined,
-    isFarcasterUser: false
+    walletAddress: undefined // Se establecerá cuando se conecte la wallet
   };
 };
 
-// Función para obtener datos adicionales del perfil de Farcaster
-const fetchFarcasterProfileInfo = async (fid: number): Promise<FarcasterProfile | null> => {
-  try {
-    // Esta función debería hacer una llamada real a la API de Farcaster
-    console.log(`Obteniendo información adicional de perfil para FID: ${fid}`);
-    
-    // Aquí deberíamos usar la API de Neynar o Hubble para obtener datos reales
-    // Por ahora, devolvemos null hasta implementar la integración real
-    return null;
-  } catch (error) {
-    console.error('Error obteniendo información adicional de Farcaster:', error);
-    return null;
-  }
-};
+// Estado global del usuario actual
+let currentUser: User | null = null;
 
-// Función para obtener datos del usuario de Farcaster
-export const getFarcasterUserData = async (): Promise<User | null> => {
-  try {
-    // Verificar si el SDK de Farcaster está disponible y el usuario está autenticado
-    if (!sdk) {
-      console.error('ERROR: SDK de Farcaster no disponible');
-      return null;
-    }
-    
-    try {
-      // Establecer un tiempo máximo para la operación
-      const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => {
-          console.log("Tiempo de espera agotado al obtener usuario de Farcaster");
-          resolve(null);
-        }, 3000); // 3 segundos máximo
-      });
-      
-      // Crear la promesa para obtener el usuario
-      const getUserPromise = (async () => {
-        // Obtener información básica del usuario
-        const user = await sdk.getUser();
-        if (!user) {
-          console.log('No hay usuario autenticado en Farcaster');
-          return null;
-        }
-        
-        console.log('Usuario de Farcaster obtenido:', user);
-        
-        // Verificación de billetera
-        let verifiedWallet = false;
-        let walletAddress = user.custody_address;
-        
-        // Si tenemos una dirección de custodia, asumimos que está verificada
-        if (walletAddress) {
-          verifiedWallet = true;
-        }
-        
-        // Si no hay dirección de wallet, no podemos continuar
-        if (!walletAddress) {
-          console.log('Usuario de Farcaster sin wallet verificada');
-          return null;
-        }
-        
-        // Mapear los datos del usuario de Farcaster a nuestro tipo User
-        return {
-          id: `farcaster-${user.fid}`,
-          username: user.username || `farcaster-${user.fid}`,
-          avatar: user.pfp || undefined,
-          walletAddress: walletAddress,
-          fid: user.fid,
-          isFarcasterUser: true,
-          verifiedWallet: verifiedWallet,
-          chainId: 10 // Optimism es la cadena principal para Farcaster
-        };
-      })();
-      
-      // Usar la promesa que termine primero
-      return await Promise.race([getUserPromise, timeoutPromise]);
-    } catch (error) {
-      console.error('Error obteniendo usuario de Farcaster:', error);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error obteniendo datos de Farcaster:', error);
-    return null;
-  }
-};
-
-// Iniciar sesión con Farcaster
-export const signInWithFarcaster = async (): Promise<User | null> => {
-  try {
-    if (!sdk) {
-      console.error('SDK de Farcaster no disponible');
-      return null;
-    }
-    
-    // Primero intentar iniciar sesión
-    try {
-      await sdk.actions.signIn();
-    } catch (e) {
-      console.error('Error en signIn de Farcaster:', e);
-    }
-    
-    // Luego intentar obtener usuario
-    const farcasterUser = await getFarcasterUserData();
-    if (farcasterUser) {
-      return farcasterUser;
-    }
-    
-    // Si no hay usuario de Farcaster, devolver null
-    console.log('No se pudo autenticar con Farcaster');
-    return null;
-  } catch (error) {
-    console.error('Error en signInWithFarcaster:', error);
-    return null;
-  }
-};
-
-// Iniciar sesión anónima (como fallback si no hay Farcaster)
-export const signInAnonymousUser = async (): Promise<User | null> => {
-  try {
-    const userCredential = await signInAnonymously(auth);
-    return mapFirebaseUser(userCredential.user);
-  } catch (error) {
-    console.error('Error signing in anonymously:', error);
-    return null;
-  }
-};
-
-// Observar cambios en el estado de autenticación
-export const onAuthStateChanged = (callback: (user: User | null) => void) => {
-  // Primero intentamos con Farcaster
-  getFarcasterUserData().then(farcasterUser => {
-    if (farcasterUser) {
-      callback(farcasterUser);
-    } else {
-      // Si no hay usuario de Farcaster, devolvemos null
-      callback(null);
-    }
-  }).catch(error => {
-    console.error('Error en onAuthStateChanged:', error);
-    callback(null);
-  });
+// Función para crear un usuario basado en una dirección de wallet
+export const createWalletUser = (walletAddress: string): User => {
+  const walletUser: User = {
+    id: `wallet-${walletAddress}`,
+    username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
+    walletAddress: walletAddress
+  };
   
-  // Devolver una función para limpiar
-  return () => {};
+  console.log('👤 Usuario de wallet creado:', walletUser);
+  currentUser = walletUser;
+  return walletUser;
 };
 
-// Obtener usuario actual
+// Función para obtener el usuario actual
 export const getCurrentUser = async (): Promise<User | null> => {
-  // Primero intentar obtener usuario de Farcaster
-  const farcasterUser = await getFarcasterUserData();
-  if (farcasterUser) {
-    return farcasterUser;
+  // Si ya tenemos un usuario de wallet en memoria, devolverlo
+  if (currentUser && currentUser.walletAddress) {
+    return currentUser;
   }
   
-  // Si no hay usuario de Farcaster, devolver null
-  return null;
+  // Si tenemos un usuario de Firebase pero sin wallet, mantenerlo
+  if (currentUser) {
+    return currentUser;
+  }
+  
+  // Si no hay usuario en Firebase, crear uno anónimo
+  if (!auth.currentUser) {
+    try {
+      console.log('🔑 Creando usuario anónimo...');
+      const result = await signInAnonymously(auth);
+      const user = mapFirebaseUser(result.user);
+      currentUser = user;
+      return user;
+    } catch (error) {
+      console.error('Error creando usuario anónimo:', error);
+      return null;
+    }
+  }
+  
+  // Mapear el usuario de Firebase existente
+  const user = mapFirebaseUser(auth.currentUser);
+  currentUser = user;
+  return user;
+};
+
+// Función para iniciar sesión (simplificada)
+export const signIn = async (): Promise<User | null> => {
+  try {
+    console.log('🔑 Iniciando sesión...');
+    return await getCurrentUser();
+  } catch (error) {
+    console.error('Error en inicio de sesión:', error);
+    return null;
+  }
+};
+
+// Función para actualizar la wallet del usuario
+export const updateUserWallet = (walletAddress: string): void => {
+  console.log('🔄 Actualizando wallet del usuario:', walletAddress);
+  
+  if (currentUser) {
+    // Actualizar el usuario existente con la nueva wallet
+    currentUser = {
+      ...currentUser,
+      id: `wallet-${walletAddress}`, // Cambiar ID para que sea basado en wallet
+      walletAddress,
+      username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`
+    };
+  } else {
+    // Crear un nuevo usuario basado en la wallet
+    currentUser = createWalletUser(walletAddress);
+  }
+  
+  console.log('✅ Usuario actualizado con wallet:', currentUser);
+};
+
+// Función para limpiar la wallet del usuario
+export const clearUserWallet = (): void => {
+  console.log('🧹 Limpiando wallet del usuario');
+  
+  if (currentUser && currentUser.walletAddress) {
+    // Si el usuario tenía una wallet, volver al estado de Firebase
+    if (auth.currentUser) {
+      currentUser = mapFirebaseUser(auth.currentUser);
+    } else {
+      currentUser = null;
+    }
+  }
+  
+  console.log('✅ Wallet limpiada, usuario actual:', currentUser);
+};
+
+// Función para cerrar sesión
+export const signOut = async (): Promise<void> => {
+  try {
+    await auth.signOut();
+    currentUser = null;
+    console.log('🚪 Sesión cerrada');
+  } catch (error) {
+    console.error('Error cerrando sesión:', error);
+  }
+};
+
+// Función para obtener el usuario por dirección de wallet (para tickets)
+export const getUserByWallet = (walletAddress: string): User => {
+  // Si el usuario actual tiene esta wallet, devolverlo
+  if (currentUser && currentUser.walletAddress === walletAddress) {
+    return currentUser;
+  }
+  
+  // Si no, crear un usuario temporal basado en la wallet
+  return {
+    id: `wallet-${walletAddress}`,
+    username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
+    walletAddress: walletAddress
+  };
+};
+
+// Suscribirse a cambios de autenticación
+export const onAuthStateChanged = (callback: (user: User | null) => void) => {
+  // Callback interno que maneja los cambios de Firebase Auth
+  const handleAuthChange = (firebaseUser: FirebaseUser | null) => {
+    console.log('🔄 Firebase auth state changed:', firebaseUser?.uid);
+    
+    // Si tenemos un usuario con wallet, mantenerlo
+    if (currentUser && currentUser.walletAddress) {
+      console.log('👤 Manteniendo usuario con wallet:', currentUser);
+      callback(currentUser);
+      return;
+    }
+    
+    // Si no hay wallet, usar el usuario de Firebase
+    const user = mapFirebaseUser(firebaseUser);
+    currentUser = user;
+    callback(user);
+  };
+  
+  return onFirebaseAuthStateChanged(auth, handleAuthChange);
 }; 

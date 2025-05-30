@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from './components/AuthProvider';
-import { MiniKitProvider } from './providers/MiniKitProvider';
+import { Web3Provider } from './providers/Web3Provider';
 import { initializeGameState } from './firebase/gameServer';
 
 // Configuración de redes blockchain
@@ -24,15 +24,16 @@ const isWarpcast = typeof window !== 'undefined' &&
    window.parent !== window);
 
 console.log(`Entorno detectado: ${isWarpcast ? 'Warpcast' : 'Navegador normal'}`);
-console.log('Inicializando aplicación con soporte para Base y Optimism');
+console.log('Inicializando aplicación con soporte para Web3 (Base, Optimism, Ethereum)');
+console.log('Coinbase Wallet SDK inicializado');
 
 // Renderizar la aplicación
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <MiniKitProvider>
+    <Web3Provider>
       <AuthProvider>
         <App />
       </AuthProvider>
-    </MiniKitProvider>
+    </Web3Provider>
   </React.StrictMode>,
 );

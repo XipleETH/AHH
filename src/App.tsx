@@ -6,8 +6,6 @@ import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
 import { Trophy, UserCircle, Zap, Terminal, WalletIcon } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
-import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
-import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
@@ -16,29 +14,21 @@ import DebugComponent from './components/DebugComponent';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
-  const { context } = useMiniKit();
-  const sendNotification = useNotification();
-  const viewProfile = useViewProfile();
-  const { user, isLoading, isFarcasterAvailable, signIn } = useAuth();
+  const { 
+    user, 
+    isLoading, 
+    signIn, 
+    connectWallet, 
+    walletConnected, 
+    walletAddress, 
+    isBaseNetwork,
+    switchToBase 
+  } = useAuth();
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const hasTriedSignIn = useRef(false);
   
   // Para evitar renderizado constante
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-
-  // Inicializar Firebase y SDK una sola vez
-  useEffect(() => {
-    const initSDK = async () => {
-      try {
-        await sdk.actions.ready();
-        console.log("SDK inicializado correctamente");
-      } catch (error) {
-        console.error("Error inicializando SDK:", error);
-      }
-    };
-    
-    initSDK();
-  }, []);
 
   // Intentar inicio de sesión automático si no hay usuario
   useEffect(() => {
@@ -46,7 +36,7 @@ function App() {
     if (!user && !isLoading && !hasTriedSignIn.current) {
       console.log("Intentando inicio de sesión automático");
       hasTriedSignIn.current = true;
-      signIn().catch(err => console.error("Error en inicio de sesión automático:", err));
+      signIn().catch((err: any) => console.error("Error en inicio de sesión automático:", err));
     }
     
     // Marcar como carga inicial completada después de un tiempo
@@ -58,26 +48,6 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [user, isLoading, signIn, initialLoadComplete]);
-
-  // Mostrar notificación cuando hay ganadores
-  const handleWin = useCallback(async () => {
-    // Usar verificación de seguridad para evitar errores undefined
-    const firstPrizeLength = gameState.lastResults?.firstPrize?.length || 0;
-    if (firstPrizeLength > 0) {
-      try {
-        await sendNotification({
-          title: '🎉 You Won!',
-          body: 'Congratulations! You matched all emojis and won the first prize!'
-        });
-      } catch (error) {
-        console.error('Failed to send notification:', error);
-      }
-    }
-  }, [gameState.lastResults, sendNotification]);
-
-  useEffect(() => {
-    handleWin();
-  }, [gameState.lastResults, handleWin]);
 
   // Pantalla de carga con animación
   if (isLoading && !initialLoadComplete) {
@@ -91,23 +61,31 @@ function App() {
     );
   }
 
-  // Si el usuario no está autenticado con Farcaster, mostrar mensaje de error
-  if (!user?.isFarcasterUser && isFarcasterAvailable && initialLoadComplete) {
+  // Si el usuario no está autenticado, mostrar mensaje de bienvenida
+  if (!user && initialLoadComplete) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
           <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji 🎲</h1>
-          <p className="text-white text-xl mb-6">Solo para usuarios de Farcaster</p>
+          <p className="text-white text-xl mb-6">¡Bienvenido al juego de lotería de emojis!</p>
           <p className="text-white/80 mb-6">
-            Para jugar a LottoMoji necesitas iniciar sesión con tu cuenta de Farcaster. 
-            Esta aplicación solo está disponible para usuarios de Farcaster Warpcast.
+            Conecta tu billetera Coinbase para empezar a jugar y generar tickets con tus emojis favoritos.
           </p>
-          <button
-            onClick={() => signIn()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-          >
-            Iniciar sesión con Farcaster
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() => connectWallet()}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <WalletIcon size={20} />
+              Conectar Coinbase Wallet
+            </button>
+            <button
+              onClick={() => signIn()}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Jugar sin billetera
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -125,27 +103,36 @@ function App() {
               <div className="bg-white/20 px-4 py-2 rounded-lg text-white flex items-center">
                 <UserCircle className="mr-2" size={18} />
                 <span>{user.username}</span>
-                {user.walletAddress && (
+                {walletAddress && (
                   <div className="ml-2 flex items-center text-sm text-white/70">
                     <WalletIcon size={12} className="mr-1" />
-                    <span>{user.walletAddress.substring(0, 6)}...{user.walletAddress.substring(user.walletAddress.length - 4)}</span>
+                    <span>{walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}</span>
                   </div>
                 )}
               </div>
             )}
-            {context?.client?.added && (
+            {!walletConnected && (
               <button
-                onClick={() => viewProfile()}
-                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+                onClick={() => connectWallet()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                Ver Perfil
+                <WalletIcon size={16} />
+                Conectar Wallet
+              </button>
+            )}
+            {walletConnected && !isBaseNetwork && (
+              <button
+                onClick={() => switchToBase()}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+              >
+                Cambiar a Base
               </button>
             )}
           </div>
         </div>
         
         {/* Componente de información de billetera */}
-        {user?.isFarcasterUser && (
+        {user && (
           <div className="mb-6">
             <WalletInfo />
           </div>
@@ -187,15 +174,15 @@ function App() {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {gameState.tickets.map(ticket => (
+          {gameState.tickets.map((ticket: any) => (
             <TicketComponent
               key={ticket.id}
               ticket={ticket}
               isWinner={
-                gameState.lastResults?.firstPrize?.some(t => t.id === ticket.id) ? 'first' :
-                gameState.lastResults?.secondPrize?.some(t => t.id === ticket.id) ? 'second' :
-                gameState.lastResults?.thirdPrize?.some(t => t.id === ticket.id) ? 'third' : 
-                gameState.lastResults?.freePrize?.some(t => t.id === ticket.id) ? 'free' : null
+                gameState.lastResults?.firstPrize?.some((t: any) => t.id === ticket.id) ? 'first' :
+                gameState.lastResults?.secondPrize?.some((t: any) => t.id === ticket.id) ? 'second' :
+                gameState.lastResults?.thirdPrize?.some((t: any) => t.id === ticket.id) ? 'third' : 
+                gameState.lastResults?.freePrize?.some((t: any) => t.id === ticket.id) ? 'free' : null
               }
             />
           ))}
