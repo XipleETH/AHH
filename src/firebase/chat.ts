@@ -30,18 +30,29 @@ const mapFirestoreMessage = (doc: any): ChatMessage => {
 // Enviar un mensaje al chat
 export const sendChatMessage = async (emojis: string[]): Promise<boolean> => {
   try {
-    const user = getCurrentUser();
+    console.log('📤 Enviando mensaje al chat:', emojis);
     
-    await addDoc(collection(db, CHAT_COLLECTION), {
+    // Obtener usuario actual de forma asíncrona
+    const user = await getCurrentUser();
+    console.log('👤 Usuario para chat:', user);
+    
+    // Preparar datos del mensaje
+    const messageData = {
       emojis,
       timestamp: serverTimestamp(),
       userId: user?.id || 'anonymous',
       username: user?.username || 'Anonymous'
-    });
+    };
     
+    console.log('📝 Datos del mensaje:', messageData);
+    
+    // Enviar mensaje a Firebase
+    const docRef = await addDoc(collection(db, CHAT_COLLECTION), messageData);
+    
+    console.log('✅ Mensaje enviado con ID:', docRef.id);
     return true;
   } catch (error) {
-    console.error('Error sending chat message:', error);
+    console.error('💥 Error sending chat message:', error);
     return false;
   }
 };
@@ -50,6 +61,8 @@ export const sendChatMessage = async (emojis: string[]): Promise<boolean> => {
 export const subscribeToChatMessages = (
   callback: (messages: ChatMessage[]) => void
 ) => {
+  console.log('🔗 Suscribiéndose a mensajes del chat');
+  
   const messagesQuery = query(
     collection(db, CHAT_COLLECTION),
     orderBy('timestamp', 'desc'),
@@ -57,7 +70,24 @@ export const subscribeToChatMessages = (
   );
   
   return onSnapshot(messagesQuery, (snapshot) => {
-    const messages = snapshot.docs.map(mapFirestoreMessage);
+    console.log(`📬 Mensajes del chat recibidos: ${snapshot.docs.length}`);
+    
+    const messages = snapshot.docs.map(doc => {
+      try {
+        return mapFirestoreMessage(doc);
+      } catch (error) {
+        console.error('❌ Error mapeando mensaje:', doc.id, error);
+        return null;
+      }
+    }).filter(message => message !== null) as ChatMessage[];
+    
+    // Ordenar mensajes por timestamp (más reciente arriba para mostrar)
+    messages.sort((a, b) => b.timestamp - a.timestamp);
+    
+    console.log('✅ Mensajes procesados para el chat:', messages.length);
     callback(messages);
+  }, (error) => {
+    console.error('💥 Error en suscripción al chat:', error);
+    callback([]);
   });
 }; 

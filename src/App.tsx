@@ -12,6 +12,7 @@ import { WalletInfo } from './components/WalletInfo';
 import TicketTestComponent from './components/TicketTestComponent';
 import DebugComponent from './components/DebugComponent';
 import WalletDebugComponent from './components/WalletDebugComponent';
+import ChatTestComponent from './components/ChatTestComponent';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -88,8 +89,9 @@ function App() {
             </button>
           </div>
         </div>
-        {/* Debug component para la pantalla de bienvenida también */}
+        {/* Debug components para la pantalla de bienvenida también */}
         <WalletDebugComponent />
+        <ChatTestComponent />
       </div>
     );
   }
@@ -196,6 +198,7 @@ function App() {
       <EmojiChat />
       <DebugComponent />
       <WalletDebugComponent />
+      <ChatTestComponent />
     </div>
   );
 }
