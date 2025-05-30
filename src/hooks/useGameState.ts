@@ -4,8 +4,6 @@ import { useRealTimeTimer } from './useRealTimeTimer';
 import { subscribeToUserTickets, subscribeToGameResults } from '../firebase/game';
 import { requestManualGameDraw, subscribeToGameState } from '../firebase/gameServer';
 
-const MAX_TICKETS = 10;
-
 const initialGameState: GameState = {
   winningNumbers: [],
   tickets: [],
@@ -24,6 +22,7 @@ export function useGameState() {
     
     // Suscribirse a los tickets del usuario
     const unsubscribeTickets = subscribeToUserTickets((tickets) => {
+      console.log(`[useGameState] Tickets recibidos del usuario: ${tickets.length}`);
       setGameState(prev => ({
         ...prev,
         tickets
@@ -108,9 +107,15 @@ export function useGameState() {
     requestManualGameDraw();
   }, []);
 
-  // Función para generar un nuevo ticket
+  // Función para generar un nuevo ticket - SIN LIMITACIONES
   const generateTicket = useCallback(async (numbers: string[]) => {
-    if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) return;
+    if (!numbers?.length) {
+      console.log('[useGameState] No se pueden generar tickets sin números');
+      return;
+    }
+    
+    console.log(`[useGameState] Generando ticket con números: ${numbers.join(' ')}`);
+    console.log(`[useGameState] Tickets actuales: ${gameState.tickets.length}`);
     
     try {
       // Crear un ticket temporal para mostrar inmediatamente
@@ -133,15 +138,18 @@ export function useGameState() {
       });
       
       if (!ticket) {
+        console.error('[useGameState] Error al generar ticket en Firebase, eliminando ticket temporal');
         // Si hay un error, eliminar el ticket temporal
         setGameState(prev => ({
           ...prev,
           tickets: prev.tickets.filter(t => t.id !== tempTicket.id)
         }));
+      } else {
+        console.log(`[useGameState] Ticket generado exitosamente en Firebase: ${ticket.id}`);
       }
       
     } catch (error) {
-      console.error('Error generating ticket:', error);
+      console.error('[useGameState] Error generating ticket:', error);
     }
   }, [gameState.tickets.length]);
 
