@@ -13,6 +13,7 @@ import TicketTestComponent from './components/TicketTestComponent';
 import DebugComponent from './components/DebugComponent';
 import WalletDebugComponent from './components/WalletDebugComponent';
 import ChatTestComponent from './components/ChatTestComponent';
+import WinnerVerificationComponent from './components/WinnerVerificationComponent';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -92,6 +93,7 @@ function App() {
         {/* Debug components para la pantalla de bienvenida también */}
         <WalletDebugComponent />
         <ChatTestComponent />
+        <WinnerVerificationComponent />
       </div>
     );
   }
@@ -199,6 +201,7 @@ function App() {
       <DebugComponent />
       <WalletDebugComponent />
       <ChatTestComponent />
+      <WinnerVerificationComponent />
     </div>
   );
 }
