@@ -46,42 +46,39 @@ const mapFirestoreTicket = (doc: any): Ticket => {
   };
 };
 
-// Generar un ticket
-export const generateTicket = async (numbers: string[]): Promise<Ticket | null> => {
-  console.log('🎫 Iniciando generación de ticket...', { numbers });
+// Generar un ticket - SOLO CON WALLET
+export const generateTicket = async (numbers: string[], walletAddress: string): Promise<Ticket | null> => {
+  console.log('🎫 Iniciando generación de ticket...', { numbers, walletAddress });
   
   try {
-    const user = await getCurrentUser();
-    console.log('👤 Usuario obtenido:', { user });
-    
-    // Verificar que el usuario esté autenticado
-    if (!user) {
-      console.error('❌ Error generating ticket: User is not authenticated');
+    // Verificar que hay una wallet address
+    if (!walletAddress) {
+      console.error('❌ Error generating ticket: No wallet address provided');
       return null;
     }
     
-    // Crear el ticket data
+    // Crear el ticket data usando SOLO la wallet address
     const ticketData = {
       numbers,
       timestamp: serverTimestamp(),
-      userId: user.id,
-      username: user.username,
-      walletAddress: user.walletAddress || null
+      userId: walletAddress, // Usar wallet address como userId
+      walletAddress: walletAddress,
+      username: `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`
     };
     
     console.log('📝 Guardando ticket en Firebase...', { ticketData });
     
     const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
     
-    console.log(`✅ Ticket creado con ID: ${ticketRef.id} para el usuario ${user.username}`);
+    console.log(`✅ Ticket creado con ID: ${ticketRef.id} para wallet ${walletAddress}`);
     
     // Devolver el ticket creado
     return {
       id: ticketRef.id,
       numbers,
       timestamp: Date.now(),
-      userId: user.id,
-      walletAddress: user.walletAddress
+      userId: walletAddress,
+      walletAddress: walletAddress
     };
   } catch (error) {
     console.error('💥 Error generating ticket:', error);
@@ -183,81 +180,62 @@ export const subscribeToGameResults = (
   }
 };
 
-// Suscribirse a los tickets del usuario actual
+// Suscribirse a los tickets del usuario actual - SOLO CON WALLET
 export const subscribeToUserTickets = (
+  walletAddress: string | null,
   callback: (tickets: Ticket[]) => void
 ) => {
-  console.log('[subscribeToUserTickets] Iniciando suscripción a tickets del usuario');
+  console.log('[subscribeToUserTickets] Iniciando suscripción a tickets de wallet:', walletAddress);
   
-  // Variable para almacenar la función de unsubscribe real
-  let realUnsubscribe: (() => void) | null = null;
+  // Si no hay wallet address, devolver array vacío
+  if (!walletAddress) {
+    console.log('[subscribeToUserTickets] No hay wallet address, devolviendo array vacío');
+    callback([]);
+    return () => {}; // Unsubscribe no-op
+  }
   
-  // Función de unsubscribe que se devuelve inmediatamente
-  const unsubscribeWrapper = () => {
-    console.log('[subscribeToUserTickets] Limpiando suscripción');
-    if (realUnsubscribe) {
-      realUnsubscribe();
-    }
-  };
-  
-  // Configurar la suscripción de forma asíncrona
-  const setupSubscription = async () => {
-    try {
-      const user = await getCurrentUser();
-      console.log('[subscribeToUserTickets] Usuario obtenido:', user);
-      
-      if (!user) {
-        console.log('[subscribeToUserTickets] No hay usuario autenticado, devolviendo array vacío');
+  try {
+    console.log(`[subscribeToUserTickets] Configurando consulta para wallet: ${walletAddress}`);
+    
+    const ticketsQuery = query(
+      collection(db, TICKETS_COLLECTION),
+      where('userId', '==', walletAddress), // Usar wallet address como userId
+      orderBy('timestamp', 'desc')
+    );
+    
+    // Configurar el listener
+    const unsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
+      try {
+        console.log(`[subscribeToUserTickets] Snapshot recibido con ${snapshot.docs.length} documentos para wallet ${walletAddress}`);
+        
+        const tickets = snapshot.docs.map(doc => {
+          try {
+            const ticket = mapFirestoreTicket(doc);
+            console.log(`[subscribeToUserTickets] Ticket mapeado:`, ticket);
+            return ticket;
+          } catch (error) {
+            console.error('[subscribeToUserTickets] Error mapping ticket document:', error, doc.id);
+            return null;
+          }
+        }).filter(ticket => ticket !== null) as Ticket[];
+        
+        console.log(`[subscribeToUserTickets] Enviando ${tickets.length} tickets al callback para wallet ${walletAddress}`);
+        callback(tickets);
+      } catch (error) {
+        console.error('[subscribeToUserTickets] Error processing tickets snapshot:', error);
         callback([]);
-        return;
       }
-      
-      console.log(`[subscribeToUserTickets] Configurando consulta para userId: ${user.id}`);
-      
-      const ticketsQuery = query(
-        collection(db, TICKETS_COLLECTION),
-        where('userId', '==', user.id),
-        orderBy('timestamp', 'desc')
-      );
-      
-      // Configurar el listener real
-      realUnsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
-        try {
-          console.log(`[subscribeToUserTickets] Snapshot recibido con ${snapshot.docs.length} documentos`);
-          
-          const tickets = snapshot.docs.map(doc => {
-            try {
-              const ticket = mapFirestoreTicket(doc);
-              console.log(`[subscribeToUserTickets] Ticket mapeado:`, ticket);
-              return ticket;
-            } catch (error) {
-              console.error('[subscribeToUserTickets] Error mapping ticket document:', error, doc.id);
-              return null;
-            }
-          }).filter(ticket => ticket !== null) as Ticket[];
-          
-          console.log(`[subscribeToUserTickets] Enviando ${tickets.length} tickets al callback`);
-          callback(tickets);
-        } catch (error) {
-          console.error('[subscribeToUserTickets] Error processing tickets snapshot:', error);
-          callback([]);
-        }
-      }, (error) => {
-        console.error('[subscribeToUserTickets] Error en la suscripción:', error);
-        callback([]);
-      });
-      
-    } catch (error) {
-      console.error('[subscribeToUserTickets] Error configurando suscripción:', error);
+    }, (error) => {
+      console.error('[subscribeToUserTickets] Error en la suscripción:', error);
       callback([]);
-    }
-  };
-  
-  // Ejecutar la configuración
-  setupSubscription();
-  
-  // Devolver la función de unsubscribe
-  return unsubscribeWrapper;
+    });
+    
+    return unsubscribe;
+  } catch (error) {
+    console.error('[subscribeToUserTickets] Error configurando suscripción:', error);
+    callback([]);
+    return () => {}; // Unsubscribe no-op
+  }
 };
 
 // Suscribirse al estado actual del juego

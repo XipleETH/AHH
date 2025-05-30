@@ -11,25 +11,34 @@ const initialGameState: GameState = {
   gameStarted: true
 };
 
-export function useGameState() {
+export function useGameState(walletAddress?: string | null) {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
   const processedResultsRef = useRef<Set<string>>(new Set());
   const lastProcessedMinuteRef = useRef<string>('');
 
-  // Suscribirse a los tickets del usuario y al estado del juego
+  // Suscribirse a los tickets del usuario basado en wallet address
   useEffect(() => {
-    console.log('[useGameState] Inicializando suscripciones...');
+    console.log('[useGameState] Inicializando suscripción a tickets para wallet:', walletAddress);
     
-    // Suscribirse a los tickets del usuario
-    const unsubscribeTickets = subscribeToUserTickets((tickets) => {
-      console.log(`[useGameState] Tickets recibidos del usuario: ${tickets.length}`);
+    // Suscribirse a los tickets del usuario usando wallet address
+    const unsubscribeTickets = subscribeToUserTickets(walletAddress || null, (tickets) => {
+      console.log(`[useGameState] Tickets recibidos para wallet ${walletAddress}: ${tickets.length}`);
       setGameState(prev => ({
         ...prev,
         tickets
       }));
     });
 
-    // Suscribirse al estado del juego para obtener los números ganadores actuales
+    return () => {
+      console.log('[useGameState] Limpiando suscripción de tickets');
+      unsubscribeTickets();
+    };
+  }, [walletAddress]); // Dependencia en walletAddress
+
+  // Suscribirse al estado del juego para obtener los números ganadores actuales
+  useEffect(() => {
+    console.log('[useGameState] Inicializando suscripción al estado del juego...');
+    
     const unsubscribeState = subscribeToGameState((nextDrawTime, winningNumbers) => {
       setGameState(prev => ({
         ...prev,
@@ -38,11 +47,10 @@ export function useGameState() {
     });
 
     return () => {
-      console.log('[useGameState] Limpiando suscripciones de tickets y estado del juego');
-      unsubscribeTickets();
+      console.log('[useGameState] Limpiando suscripción del estado del juego');
       unsubscribeState();
     };
-  }, []);
+  }, []); // Sin dependencias, solo una vez
 
   // Función para obtener la clave de minuto de un timestamp
   const getMinuteKey = (timestamp: number): string => {
@@ -107,14 +115,20 @@ export function useGameState() {
     requestManualGameDraw();
   }, []);
 
-  // Función para generar un nuevo ticket - SIN LIMITACIONES
+  // Función para generar un nuevo ticket - REQUIERE WALLET
   const generateTicket = useCallback(async (numbers: string[]) => {
     if (!numbers?.length) {
       console.log('[useGameState] No se pueden generar tickets sin números');
       return;
     }
     
-    console.log(`[useGameState] Generando ticket con números: ${numbers.join(' ')}`);
+    if (!walletAddress) {
+      console.error('[useGameState] No se puede generar ticket: wallet no conectada');
+      alert('Debes conectar tu wallet para jugar la lotería');
+      return;
+    }
+    
+    console.log(`[useGameState] Generando ticket con números: ${numbers.join(' ')} para wallet: ${walletAddress}`);
     console.log(`[useGameState] Tickets actuales: ${gameState.tickets.length}`);
     
     try {
@@ -123,7 +137,8 @@ export function useGameState() {
         id: 'temp-' + crypto.randomUUID(),
         numbers,
         timestamp: Date.now(),
-        userId: 'temp'
+        userId: walletAddress,
+        walletAddress: walletAddress
       };
       
       // Actualizar el estado inmediatamente con el ticket temporal
@@ -132,9 +147,9 @@ export function useGameState() {
         tickets: [...prev.tickets, tempTicket]
       }));
       
-      // Generar el ticket en Firebase
+      // Generar el ticket en Firebase usando wallet address
       const ticket = await import('../firebase/game').then(({ generateTicket: generateFirebaseTicket }) => {
-        return generateFirebaseTicket(numbers);
+        return generateFirebaseTicket(numbers, walletAddress);
       });
       
       if (!ticket) {
@@ -151,7 +166,7 @@ export function useGameState() {
     } catch (error) {
       console.error('[useGameState] Error generating ticket:', error);
     }
-  }, [gameState.tickets.length]);
+  }, [walletAddress, gameState.tickets.length]);
 
   return {
     gameState: {

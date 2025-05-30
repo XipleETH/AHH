@@ -12,7 +12,6 @@ import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
 
 function App() {
-  const { gameState, generateTicket, forceGameDraw } = useGameState();
   const { 
     user, 
     isLoading, 
@@ -23,6 +22,9 @@ function App() {
     isBaseNetwork,
     switchToBase 
   } = useAuth();
+  
+  // Pasar walletAddress al hook de game state
+  const { gameState, generateTicket, forceGameDraw } = useGameState(walletAddress);
   const hasTriedSignIn = useRef(false);
   
   // Para evitar renderizado constante
@@ -59,15 +61,16 @@ function App() {
     );
   }
 
-  // Si el usuario no está autenticado, mostrar mensaje de bienvenida
-  if (!user && initialLoadComplete) {
+  // Si no hay wallet conectada, mostrar mensaje de requerimiento de wallet
+  if (!walletConnected && initialLoadComplete) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4 text-center">🎰 LottoMoji 🎲</h1>
-          <p className="text-white text-lg sm:text-xl mb-6">¡Bienvenido al juego de lotería de emojis!</p>
+          <div className="text-6xl mb-4">🔒</div>
+          <p className="text-white text-lg sm:text-xl mb-4">¡Wallet Requerida!</p>
           <p className="text-white/80 mb-6">
-            Conecta tu billetera Coinbase para empezar a jugar y generar tickets con tus emojis favoritos.
+            Para jugar LottoMoji necesitas conectar tu billetera Coinbase. Todos los tickets se guardan usando tu dirección de wallet como identificación.
           </p>
           <div className="space-y-3">
             <button
@@ -77,12 +80,9 @@ function App() {
               <WalletIcon size={20} />
               Conectar Coinbase Wallet
             </button>
-            <button
-              onClick={() => signIn()}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-            >
-              Jugar sin billetera
-            </button>
+            <p className="text-white/60 text-sm">
+              Sin wallet no puedes generar tickets
+            </p>
           </div>
         </div>
       </div>
@@ -100,16 +100,12 @@ function App() {
             </h1>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-2">
-            {user && (
+            {walletAddress && (
               <div className="bg-white/20 px-4 py-2 rounded-lg text-white flex items-center">
-                <UserCircle className="mr-2" size={18} />
-                <span className="text-sm sm:text-base">{user.username}</span>
-                {walletAddress && (
-                  <div className="ml-2 flex items-center text-xs sm:text-sm text-white/70">
-                    <WalletIcon size={12} className="mr-1" />
-                    <span>{walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}</span>
-                  </div>
-                )}
+                <WalletIcon className="mr-2" size={18} />
+                <span className="text-sm sm:text-base">
+                  {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                </span>
               </div>
             )}
             {!walletConnected && (
@@ -133,7 +129,7 @@ function App() {
         </div>
         
         {/* Componente de información de billetera */}
-        {user && (
+        {walletConnected && (
           <div className="mb-6">
             <WalletInfo />
           </div>
@@ -155,7 +151,7 @@ function App() {
           secondPrize={gameState.lastResults?.secondPrize || []}
           thirdPrize={gameState.lastResults?.thirdPrize || []}
           freePrize={gameState.lastResults?.freePrize || []}
-          currentUserId={user?.id}
+          currentUserId={walletAddress || ''} // Usar wallet address
         />
 
         {/* Botón de sorteo solo en desarrollo */}
@@ -170,12 +166,24 @@ function App() {
           </div>
         )}
 
-        <TicketGenerator
-          onGenerateTicket={generateTicket}
-          disabled={false} // Sin límite de tickets
-          ticketCount={gameState.tickets.length}
-          maxTickets={999} // Número alto para mostrar
-        />
+        {/* Solo mostrar el generador si hay wallet conectada */}
+        {walletConnected && (
+          <TicketGenerator
+            onGenerateTicket={generateTicket}
+            disabled={false} // Sin límite de tickets
+            ticketCount={gameState.tickets.length}
+            maxTickets={999} // Número alto para mostrar
+          />
+        )}
+
+        {/* Mensaje si no hay wallet para generar tickets */}
+        {!walletConnected && (
+          <div className="mb-8 p-6 bg-white/10 rounded-xl text-center">
+            <WalletIcon className="mx-auto mb-4 text-white/70" size={48} />
+            <p className="text-white text-lg mb-2">Conecta tu wallet para generar tickets</p>
+            <p className="text-white/70">Todos los tickets se guardan usando tu dirección de wallet</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {gameState.tickets.map((ticket: any) => (
@@ -197,8 +205,8 @@ function App() {
       <GameHistoryButton />
       <EmojiChat />
       
-      {/* Componente de debug temporal */}
-      <DebugGameResults />
+      {/* Componente de debug solo en desarrollo */}
+      {import.meta.env.DEV && <DebugGameResults />}
     </div>
   );
 }

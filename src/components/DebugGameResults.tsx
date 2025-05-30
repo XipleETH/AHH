@@ -3,7 +3,7 @@ import { useGameState } from '../hooks/useGameState';
 import { useAuth } from './AuthProvider';
 import { subscribeToGameResults } from '../firebase/game';
 import { checkWin, EMOJIS } from '../utils/gameLogic';
-import { Bug, TrendingUp, Users, Trophy, Target } from 'lucide-react';
+import { Bug, TrendingUp, Users, Trophy, Target, WalletIcon } from 'lucide-react';
 
 interface DetailedGameResult {
   id: string;
@@ -16,8 +16,8 @@ interface DetailedGameResult {
 }
 
 export const DebugGameResults: React.FC = () => {
-  const { gameState, generateTicket } = useGameState();
-  const { user } = useAuth();
+  const { walletAddress } = useAuth();
+  const { gameState, generateTicket } = useGameState(walletAddress);
   const [allResults, setAllResults] = useState<DetailedGameResult[]>([]);
   const [isVisible, setIsVisible] = useState(false);
   const [selectedResult, setSelectedResult] = useState<DetailedGameResult | null>(null);
@@ -39,6 +39,11 @@ export const DebugGameResults: React.FC = () => {
       return;
     }
 
+    if (!walletAddress) {
+      alert('Debes conectar tu wallet primero');
+      return;
+    }
+
     // Generar ticket de primer premio (exacto)
     generateTicket([...gameState.winningNumbers]);
 
@@ -54,7 +59,7 @@ export const DebugGameResults: React.FC = () => {
     const freePrize = [gameState.winningNumbers[1], gameState.winningNumbers[2], gameState.winningNumbers[3], EMOJIS[1]];
     generateTicket(freePrize);
 
-    console.log('[DebugGameResults] Tickets de prueba generados');
+    console.log('[DebugGameResults] Tickets de prueba generados para wallet:', walletAddress);
   };
 
   // Analizar ganadores potenciales para el último resultado
@@ -98,7 +103,7 @@ export const DebugGameResults: React.FC = () => {
           <div className="mb-4">
             <button
               onClick={generateWinningTickets}
-              disabled={!gameState.winningNumbers.length}
+              disabled={!gameState.winningNumbers.length || !walletAddress}
               className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Target size={16} />
@@ -117,8 +122,10 @@ export const DebugGameResults: React.FC = () => {
               <span>Total Results: {allResults.length}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Trophy size={16} />
-              <span>Current User: {user?.username || 'None'}</span>
+              <WalletIcon size={16} />
+              <span className="text-xs">
+                {walletAddress ? `${walletAddress.substring(0, 8)}...` : 'No Wallet'}
+              </span>
             </div>
           </div>
 
