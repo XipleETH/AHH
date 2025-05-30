@@ -5,6 +5,7 @@ import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
 import { DebugGameResults } from './components/DebugGameResults';
+import TicketDiagnostic from './components/TicketDiagnostic';
 import { Trophy, UserCircle, Zap, Terminal, WalletIcon } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useAuth } from './components/AuthProvider';
@@ -204,6 +205,9 @@ function App() {
       {/* Solo mantener componentes esenciales */}
       <GameHistoryButton />
       <EmojiChat />
+      
+      {/* Componente de diagnóstico de tickets */}
+      <TicketDiagnostic />
       
       {/* Componente de debug solo en desarrollo */}
       {import.meta.env.DEV && <DebugGameResults />}
