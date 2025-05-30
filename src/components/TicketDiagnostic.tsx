@@ -130,9 +130,88 @@ const TicketDiagnostic: React.FC = () => {
     };
   };
 
+  const analyzeTicketComparison = () => {
+    if (!latestResult || !winningNumbers.length) {
+      return {
+        issue: 'No hay resultados oficiales o números ganadores para comparar',
+        frontendTickets: [],
+        backendWinners: {},
+        mismatches: []
+      };
+    }
+
+    const frontendTickets = tickets.map(ticket => ({
+      id: ticket.id,
+      numbers: ticket.numbers,
+      userId: ticket.userId,
+      walletAddress: ticket.walletAddress,
+      localWinCheck: checkWin(ticket.numbers, winningNumbers)
+    }));
+
+    const backendWinners = {
+      firstPrize: latestResult.firstPrize || [],
+      secondPrize: latestResult.secondPrize || [],
+      thirdPrize: latestResult.thirdPrize || [],
+      freePrize: latestResult.freePrize || []
+    };
+
+    const mismatches = [];
+    
+    // Verificar cada ticket del frontend
+    frontendTickets.forEach(ticket => {
+      const isInFirstPrize = backendWinners.firstPrize.some(t => t.id === ticket.id);
+      const isInSecondPrize = backendWinners.secondPrize.some(t => t.id === ticket.id);
+      const isInThirdPrize = backendWinners.thirdPrize.some(t => t.id === ticket.id);
+      const isInFreePrize = backendWinners.freePrize.some(t => t.id === ticket.id);
+
+      const backendResult = isInFirstPrize ? 'firstPrize' : 
+                           isInSecondPrize ? 'secondPrize' : 
+                           isInThirdPrize ? 'thirdPrize' : 
+                           isInFreePrize ? 'freePrize' : null;
+
+      const frontendResult = ticket.localWinCheck.firstPrize ? 'firstPrize' : 
+                            ticket.localWinCheck.secondPrize ? 'secondPrize' : 
+                            ticket.localWinCheck.thirdPrize ? 'thirdPrize' : 
+                            ticket.localWinCheck.freePrize ? 'freePrize' : null;
+
+      if (frontendResult !== backendResult) {
+        mismatches.push({
+          ticketId: ticket.id,
+          numbers: ticket.numbers,
+          frontendResult,
+          backendResult,
+          userId: ticket.userId,
+          detailedCheck: ticket.localWinCheck
+        });
+      }
+    });
+
+    // Verificar tickets ganadores del backend que no están en el frontend
+    const allBackendWinners = [
+      ...backendWinners.firstPrize,
+      ...backendWinners.secondPrize,
+      ...backendWinners.thirdPrize,
+      ...backendWinners.freePrize
+    ];
+
+    const orphanedBackendWinners = allBackendWinners.filter(backendTicket => 
+      !frontendTickets.some(frontendTicket => frontendTicket.id === backendTicket.id)
+    );
+
+    return {
+      frontendTickets,
+      backendWinners,
+      mismatches,
+      orphanedBackendWinners,
+      totalFrontendTickets: frontendTickets.length,
+      totalBackendWinners: allBackendWinners.length
+    };
+  };
+
   const runDiagnostic = () => {
     const probabilities = calculateProbabilities();
     const ticketAnalysis = analyzeTickets();
+    const comparisonAnalysis = analyzeTicketComparison();
     
     // Analizar resultados de cada ticket válido
     const ticketResults = ticketAnalysis.validTickets.map(ticket => {
@@ -164,6 +243,7 @@ const TicketDiagnostic: React.FC = () => {
     setAnalysis({
       probabilities,
       ticketAnalysis,
+      comparisonAnalysis,
       ticketResults,
       winningNumbers,
       totalTickets: tickets.length,
@@ -365,17 +445,117 @@ const TicketDiagnostic: React.FC = () => {
 
               {/* Recomendaciones */}
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-bold text-lg mb-2 text-blue-700">💡 Recomendaciones</h3>
-                <ul className="list-disc list-inside space-y-1 text-blue-800">
-                  <li><strong>Validez de Tickets:</strong> Los tickets participan en TODOS los sorteos sin límite de tiempo.</li>
-                  <li><strong>Identificación:</strong> Cada ticket tiene un ID único para verificación.</li>
-                  <li><strong>Probabilidades:</strong> Son muy bajas por diseño - la lotería es un juego de azar.</li>
-                  <li><strong>Verificación:</strong> Usa el componente de verificación de ganadores para confirmar resultados.</li>
-                  {analysis.ticketAnalysis.duplicates.length > 0 && (
-                    <li><strong>Duplicados:</strong> Tienes tickets con números idénticos - considera generar combinaciones diferentes.</li>
-                  )}
-                </ul>
+                <h3 className="font-bold text-lg mb-2 text-blue-700">💡 Diagnóstico Crítico del Sistema</h3>
+                <div className="bg-red-100 p-4 rounded-lg mb-4 border border-red-300">
+                  <h4 className="font-bold text-red-700 mb-2">🚨 PROBLEMA IDENTIFICADO</h4>
+                  <p className="text-red-800 mb-2">
+                    <strong>Todos los tickets participan en todos los sorteos sin límite de tiempo.</strong>
+                  </p>
+                  <p className="text-red-700 text-sm mb-2">
+                    En el código del backend (functions/index.js línea 226), se obtienen TODOS los tickets:
+                    <code className="bg-red-200 px-1 text-xs">const ticketsSnapshot = await db.collection(TICKETS_COLLECTION).get();</code>
+                  </p>
+                  <div className="text-red-700 text-sm">
+                    <p>📊 <strong>Probabilidades reales actuales:</strong></p>
+                    <ul className="list-disc list-inside ml-4">
+                      <li>Si hay 1000 tickets participando y solo 25 emojis posibles</li>
+                      <li>Probabilidad de 4 exactos: 1 en {Math.round(Math.pow(25, 4)).toLocaleString()} = 0.00016%</li>
+                      <li>Con cientos/miles de tickets, las probabilidades se vuelven prácticamente cero</li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div className="bg-green-100 p-4 rounded-lg border border-green-300">
+                  <h4 className="font-bold text-green-700 mb-2">✅ SOLUCIONES RECOMENDADAS</h4>
+                  <ul className="list-disc list-inside space-y-1 text-green-800 text-sm">
+                    <li><strong>Implementar validez temporal:</strong> Solo tickets de la última hora deberían participar</li>
+                    <li><strong>Limpiar tickets antiguos:</strong> Eliminar tickets de más de 24 horas</li>
+                    <li><strong>Mostrar estadísticas reales:</strong> Informar cuántos tickets están compitiendo</li>
+                    <li><strong>Ajustar probabilidades:</strong> Reducir el pool de emojis o cambiar criterios</li>
+                    <li><strong>Separar por rondas:</strong> Cada sorteo debería usar solo tickets nuevos</li>
+                  </ul>
+                </div>
+
+                <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-300 mt-4">
+                  <h4 className="font-bold text-yellow-700 mb-2">⚡ ACCIÓN INMEDIATA SUGERIDA</h4>
+                  <p className="text-yellow-800 text-sm">
+                    Para probar si el sistema funciona correctamente, usa el botón "Forzar Sorteo" en desarrollo 
+                    cuando solo tengas pocos tickets (1-10) para ver si aparecen ganadores con combinaciones específicas.
+                  </p>
+                </div>
               </div>
+
+              {/* Análisis de Comparación Frontend vs Backend */}
+              {analysis.comparisonAnalysis && (
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <h3 className="font-bold text-lg mb-2 flex items-center text-red-700">
+                    <AlertTriangle className="mr-2" />
+                    Análisis de Comparación Frontend vs Backend
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">{analysis.comparisonAnalysis.totalFrontendTickets}</div>
+                      <div className="text-sm text-gray-600">Tickets Frontend</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">{analysis.comparisonAnalysis.totalBackendWinners}</div>
+                      <div className="text-sm text-gray-600">Ganadores Backend</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-600">{analysis.comparisonAnalysis.mismatches.length}</div>
+                      <div className="text-sm text-gray-600">Discrepancias</div>
+                    </div>
+                  </div>
+
+                  {analysis.comparisonAnalysis.mismatches.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-red-700 mb-2">🚨 Discrepancias Encontradas:</h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {analysis.comparisonAnalysis.mismatches.map((mismatch, index) => (
+                          <div key={index} className="bg-white p-3 rounded border border-red-200">
+                            <div className="font-mono text-sm text-gray-500">ID: {mismatch.ticketId}</div>
+                            <div className="text-lg">{mismatch.numbers.join(' ')}</div>
+                            <div className="text-sm">
+                              <span className="text-blue-600">Frontend: {mismatch.frontendResult || 'Sin premio'}</span>
+                              {' vs '}
+                              <span className="text-green-600">Backend: {mismatch.backendResult || 'Sin premio'}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Usuario: {mismatch.userId}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analysis.comparisonAnalysis.orphanedBackendWinners.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-orange-700 mb-2">👻 Tickets Ganadores Huérfanos (solo en backend):</h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {analysis.comparisonAnalysis.orphanedBackendWinners.map((ticket, index) => (
+                          <div key={index} className="bg-orange-100 p-2 rounded border">
+                            <div className="font-mono text-sm text-gray-500">ID: {ticket.id}</div>
+                            <div>{ticket.numbers.join(' ')}</div>
+                            <div className="text-xs text-gray-500">Usuario: {ticket.userId}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-sm text-orange-700 mt-2">
+                        Estos tickets ganaron en el backend pero no aparecen en tu lista local. 
+                        Esto podría indicar un problema de sincronización.
+                      </div>
+                    </div>
+                  )}
+
+                  {analysis.comparisonAnalysis.mismatches.length === 0 && analysis.comparisonAnalysis.orphanedBackendWinners.length === 0 && (
+                    <div className="text-green-700">
+                      ✅ No se encontraron discrepancias entre frontend y backend
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="text-center">
                 <button
