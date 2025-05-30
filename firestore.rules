@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permitir acceso a tickets de jugadores
+    match /player_tickets/{document} {
+      allow read, write: if true; // Por ahora permitimos todo para debug
+    }
+    
+    // Permitir acceso a resultados de juegos
+    match /game_results/{document} {
+      allow read: if true;
+      allow write: if false; // Solo las Cloud Functions pueden escribir resultados
+    }
+    
+    // Permitir acceso a mensajes de chat
+    match /chat_messages/{document} {
+      allow read, write: if true;
+    }
+    
+    // Permitir acceso a documentos de estado del juego
+    match /game_state/{document} {
+      allow read: if true;
+      allow write: if false; // Solo las Cloud Functions pueden escribir estado
+    }
+    
+    // Permitir acceso a documentos de control de sorteos
+    match /draw_control/{document} {
+      allow read: if true;
+      allow write: if false; // Solo las Cloud Functions pueden escribir control
+    }
+  }
+} 

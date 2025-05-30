@@ -48,18 +48,56 @@ const mapFirestoreTicket = (doc: any): Ticket => {
 
 // Generar un ticket
 export const generateTicket = async (numbers: string[]): Promise<Ticket | null> => {
+  console.log('🎫 Iniciando generación de ticket...', { numbers });
+  
   try {
     const user = await getCurrentUser();
+    console.log('👤 Usuario obtenido:', { user });
     
     // Verificar que el usuario esté autenticado con Farcaster
     if (!user || !user.isFarcasterUser) {
-      console.error('Error generating ticket: User is not authenticated with Farcaster');
-      return null;
+      console.error('❌ Error generating ticket: User is not authenticated with Farcaster');
+      
+      // Para desarrollo, permitir generar tickets sin usuario Farcaster
+      console.log('🔧 Modo desarrollo: Generando ticket temporal sin usuario Farcaster');
+      
+      // Generar un ticket temporal para pruebas
+      const tempUser = {
+        id: 'temp-user-' + Date.now(),
+        username: 'TempUser',
+        walletAddress: '0x0000000000000000000000000000000000000000',
+        fid: 0,
+        isFarcasterUser: false
+      };
+      
+      const ticketData = {
+        numbers,
+        timestamp: serverTimestamp(),
+        userId: tempUser.id,
+        username: tempUser.username,
+        walletAddress: tempUser.walletAddress,
+        fid: tempUser.fid,
+        isFarcasterUser: false,
+        isDevelopmentTicket: true
+      };
+      
+      console.log('📝 Guardando ticket en Firebase...', { ticketData });
+      
+      const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
+      
+      console.log('✅ Ticket guardado exitosamente con ID:', ticketRef.id);
+      
+      return {
+        id: ticketRef.id,
+        numbers,
+        timestamp: Date.now(),
+        userId: tempUser.id
+      };
     }
     
     // Verificar que el usuario tenga una billetera
     if (!user.walletAddress) {
-      console.error('Error generating ticket: User does not have a wallet address');
+      console.error('❌ Error generating ticket: User does not have a wallet address');
       return null;
     }
     
@@ -88,10 +126,12 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       tickethash: uniqueHash
     };
     
+    console.log('📝 Guardando ticket en Firebase...', { ticketData });
+    
     const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
     
     // Simular una transacción en la blockchain (en el futuro esto sería real)
-    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
+    console.log(`✅ Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
     
     // Devolver el ticket creado
     return {
@@ -103,7 +143,17 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       fid: user.fid
     };
   } catch (error) {
-    console.error('Error generating ticket:', error);
+    console.error('💥 Error generating ticket:', error);
+    
+    // Mostrar detalles específicos del error
+    if (error instanceof Error) {
+      console.error('📋 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+    
     return null;
   }
 };

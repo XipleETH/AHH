@@ -11,6 +11,7 @@ import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
+import TicketTestComponent from './components/TicketTestComponent';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -200,6 +201,7 @@ function App() {
         </div>
       </div>
       <GameHistoryButton />
+      <TicketTestComponent />
       <EmojiChat />
     </div>
   );
