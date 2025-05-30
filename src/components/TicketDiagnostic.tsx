@@ -320,21 +320,66 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) =
     }
 
     try {
-      // Generar un ticket de cada tipo
+      // Generar tickets con mayor probabilidad de ganar
+      console.log('Generando tickets de prueba con números ganadores:', winningNumbers);
+      
+      // Generar un ticket de cada tipo con delay para evitar conflictos
       await generateWinningTicket('first');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       await generateWinningTicket('second');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       await generateWinningTicket('third');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       await generateWinningTicket('free');
       
-      alert('4 tickets de prueba generados (uno de cada tipo de premio)');
+      alert('4 tickets de prueba generados (uno de cada tipo de premio).\n\nAhora usa "Forzar Sorteo" para procesarlos.');
     } catch (error) {
       console.error('Error generando tickets de prueba:', error);
       alert('Error generando tickets de prueba');
     }
   };
+
+  // Función para diagnosticar problemas específicos de producción
+  const diagnoseProductionIssues = () => {
+    const issues = [];
+    
+    // Verificar si hay resultados recientes
+    if (!latestResult) {
+      issues.push('❌ No hay resultados de sorteos recientes');
+    }
+    
+    // Verificar si hay números ganadores
+    if (!winningNumbers || winningNumbers.length === 0) {
+      issues.push('❌ No hay números ganadores definidos');
+    }
+    
+    // Verificar la cantidad de tickets
+    if (tickets.length === 0) {
+      issues.push('❌ No tienes tickets generados');
+    } else if (tickets.length > 100) {
+      issues.push(`⚠️ Tienes ${tickets.length} tickets - probabilidades muy bajas`);
+    }
+    
+    // Verificar si hay tickets que deberían ganar pero no aparecen
+    if (winningNumbers.length > 0 && tickets.length > 0) {
+      const shouldWin = tickets.filter(ticket => {
+        const winCheck = checkWin(ticket.numbers, winningNumbers);
+        return winCheck.firstPrize || winCheck.secondPrize || winCheck.thirdPrize || winCheck.freePrize;
+      });
+      
+      if (shouldWin.length > 0 && (!latestResult || 
+          (latestResult.firstPrize.length === 0 && 
+           latestResult.secondPrize.length === 0 && 
+           latestResult.thirdPrize.length === 0 && 
+           latestResult.freePrize.length === 0))) {
+        issues.push(`🚨 CRÍTICO: ${shouldWin.length} tickets deberían ganar pero no aparecen en resultados`);
+      }
+    }
+    
+    return issues;
+  };
+
+  const productionIssues = diagnoseProductionIssues();
 
   // Función para mostrar estadísticas detalladas
   const getDetailedStats = () => {
@@ -361,6 +406,30 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) =
   };
 
   const detailedStats = getDetailedStats();
+
+  // Función de solución rápida para problemas de producción
+  const quickFixProduction = async () => {
+    alert('🚀 SOLUCIÓN RÁPIDA INICIADA\n\n1. Generando tickets ganadores garantizados\n2. Después ejecuta "Forzar Sorteo" desde la página principal');
+    
+    try {
+      // Si no hay números ganadores, mostrar instrucciones
+      if (!winningNumbers || winningNumbers.length === 0) {
+        alert('❌ PRIMERO: Ve a la página principal y haz clic en "Forzar Sorteo" para generar números ganadores.\n\nDespués regresa aquí y usa este botón nuevamente.');
+        return;
+      }
+
+      // Generar tickets ganadores garantizados
+      await generateTestTickets();
+      
+      // Dar instrucciones claras
+      setTimeout(() => {
+        alert('✅ PASO 1 COMPLETADO: Tickets ganadores generados\n\n🎯 PASO 2: Ve a la página principal y haz clic en "Forzar Sorteo"\n\n🏆 PASO 3: Verifica que aparezcan los ganadores en la sección de anuncios');
+      }, 2000);
+      
+    } catch (error) {
+      alert('❌ Error en solución rápida: ' + error.message);
+    }
+  };
 
   if (!isOpen) {
     return (
@@ -656,6 +725,31 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) =
                   Herramientas de Prueba para Ganadores
                 </h3>
                 
+                {/* Botón de Solución Rápida */}
+                <div className="mb-4">
+                  <button
+                    onClick={quickFixProduction}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold text-lg"
+                  >
+                    🚀 SOLUCIÓN RÁPIDA - GENERAR GANADORES AHORA
+                  </button>
+                  <p className="text-xs text-gray-600 mt-1 text-center">
+                    Genera tickets ganadores garantizados para probar el sistema
+                  </p>
+                </div>
+
+                {/* Diagnóstico de Problemas */}
+                {productionIssues.length > 0 && (
+                  <div className="bg-red-100 p-3 rounded border border-red-300 mb-4">
+                    <h4 className="font-bold text-red-700 mb-2">🚨 Problemas Detectados:</h4>
+                    <ul className="text-red-800 text-sm space-y-1">
+                      {productionIssues.map((issue, index) => (
+                        <li key={index}>• {issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
                 {winningNumbers.length > 0 ? (
                   <div className="space-y-4">
                     <div className="bg-white p-3 rounded border">
@@ -690,6 +784,12 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) =
                             <div className="font-bold text-red-700">{detailedStats.noMatch}</div>
                             <div>Sin Premio</div>
                           </div>
+                        </div>
+                      )}
+
+                      {productionIssues.length > 0 && (
+                        <div className="bg-red-100 p-2 rounded">
+                          <div className="font-bold text-red-700">{productionIssues.join('\n')}</div>
                         </div>
                       )}
                     </div>
