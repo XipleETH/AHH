@@ -5,7 +5,11 @@ import { useAuth } from './AuthProvider';
 import { checkWin, EMOJIS } from '../utils/gameLogic';
 import { GameResult, Ticket } from '../types';
 
-const TicketDiagnostic: React.FC = () => {
+interface TicketDiagnosticProps {
+  generateTicket: (numbers: string[]) => Promise<void>;
+}
+
+const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const { gameState } = useGameState();
@@ -269,6 +273,94 @@ const TicketDiagnostic: React.FC = () => {
     const seconds = Math.floor((ms % (1000 * 60)) / 1000);
     return `${minutes}m ${seconds}s`;
   };
+
+  // Función para generar ticket ganador específico
+  const generateWinningTicket = async (prizeType: 'first' | 'second' | 'third' | 'free') => {
+    if (!winningNumbers || winningNumbers.length !== 4) {
+      alert('No hay números ganadores definidos. Ejecuta un sorteo primero.');
+      return;
+    }
+
+    let ticketNumbers: string[] = [];
+    
+    switch (prizeType) {
+      case 'first':
+        // 4 aciertos en orden exacto
+        ticketNumbers = [...winningNumbers];
+        break;
+      case 'second':
+        // 4 aciertos en cualquier orden (mezclar)
+        ticketNumbers = [...winningNumbers].sort(() => Math.random() - 0.5);
+        break;
+      case 'third':
+        // 3 aciertos en orden exacto + 1 diferente
+        ticketNumbers = [...winningNumbers.slice(0, 3), EMOJIS[Math.floor(Math.random() * EMOJIS.length)]];
+        break;
+      case 'free':
+        // 3 aciertos en cualquier orden + 1 diferente
+        const mixedThree = [...winningNumbers.slice(0, 3)].sort(() => Math.random() - 0.5);
+        ticketNumbers = [...mixedThree, EMOJIS[Math.floor(Math.random() * EMOJIS.length)]];
+        break;
+    }
+
+    try {
+      await generateTicket(ticketNumbers);
+      alert(`Ticket ${prizeType} prize generado: ${ticketNumbers.join(' ')}`);
+    } catch (error) {
+      console.error('Error generando ticket ganador:', error);
+      alert('Error generando ticket ganador');
+    }
+  };
+
+  // Función para generar múltiples tickets de prueba
+  const generateTestTickets = async () => {
+    if (!winningNumbers || winningNumbers.length !== 4) {
+      alert('No hay números ganadores definidos. Ejecuta un sorteo primero.');
+      return;
+    }
+
+    try {
+      // Generar un ticket de cada tipo
+      await generateWinningTicket('first');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await generateWinningTicket('second');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await generateWinningTicket('third');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await generateWinningTicket('free');
+      
+      alert('4 tickets de prueba generados (uno de cada tipo de premio)');
+    } catch (error) {
+      console.error('Error generando tickets de prueba:', error);
+      alert('Error generando tickets de prueba');
+    }
+  };
+
+  // Función para mostrar estadísticas detalladas
+  const getDetailedStats = () => {
+    if (!winningNumbers.length) return null;
+
+    const matchingTickets = {
+      firstPrize: 0,
+      secondPrize: 0,
+      thirdPrize: 0,
+      freePrize: 0,
+      noMatch: 0
+    };
+
+    tickets.forEach(ticket => {
+      const winCheck = checkWin(ticket.numbers, winningNumbers);
+      if (winCheck.firstPrize) matchingTickets.firstPrize++;
+      else if (winCheck.secondPrize) matchingTickets.secondPrize++;
+      else if (winCheck.thirdPrize) matchingTickets.thirdPrize++;
+      else if (winCheck.freePrize) matchingTickets.freePrize++;
+      else matchingTickets.noMatch++;
+    });
+
+    return matchingTickets;
+  };
+
+  const detailedStats = getDetailedStats();
 
   if (!isOpen) {
     return (
@@ -556,6 +648,103 @@ const TicketDiagnostic: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* Herramientas de Prueba */}
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="font-bold text-lg mb-2 flex items-center">
+                  <Target className="mr-2 text-purple-500" />
+                  Herramientas de Prueba para Ganadores
+                </h3>
+                
+                {winningNumbers.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="bg-white p-3 rounded border">
+                      <h4 className="font-semibold mb-2">Números Ganadores Actuales:</h4>
+                      <div className="flex justify-center space-x-2 mb-3">
+                        {winningNumbers.map((emoji, index) => (
+                          <span key={index} className="text-2xl bg-yellow-100 p-2 rounded">
+                            {emoji}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {detailedStats && (
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center text-sm">
+                          <div className="bg-yellow-100 p-2 rounded">
+                            <div className="font-bold text-yellow-700">{detailedStats.firstPrize}</div>
+                            <div>1er Premio</div>
+                          </div>
+                          <div className="bg-gray-100 p-2 rounded">
+                            <div className="font-bold text-gray-700">{detailedStats.secondPrize}</div>
+                            <div>2do Premio</div>
+                          </div>
+                          <div className="bg-orange-100 p-2 rounded">
+                            <div className="font-bold text-orange-700">{detailedStats.thirdPrize}</div>
+                            <div>3er Premio</div>
+                          </div>
+                          <div className="bg-green-100 p-2 rounded">
+                            <div className="font-bold text-green-700">{detailedStats.freePrize}</div>
+                            <div>Ticket Gratis</div>
+                          </div>
+                          <div className="bg-red-100 p-2 rounded">
+                            <div className="font-bold text-red-700">{detailedStats.noMatch}</div>
+                            <div>Sin Premio</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <button
+                        onClick={() => generateWinningTicket('first')}
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm"
+                      >
+                        🏆 Generar 1er Premio
+                      </button>
+                      <button
+                        onClick={() => generateWinningTicket('second')}
+                        className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm"
+                      >
+                        🥈 Generar 2do Premio
+                      </button>
+                      <button
+                        onClick={() => generateWinningTicket('third')}
+                        className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm"
+                      >
+                        🥉 Generar 3er Premio
+                      </button>
+                      <button
+                        onClick={() => generateWinningTicket('free')}
+                        className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm"
+                      >
+                        🎟️ Generar Ticket Gratis
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={generateTestTickets}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-medium"
+                    >
+                      🎯 Generar Set Completo de Prueba (4 tickets)
+                    </button>
+
+                    <div className="bg-blue-100 p-3 rounded text-sm">
+                      <p className="text-blue-800">
+                        <strong>💡 Instrucciones:</strong> Después de generar tickets de prueba, 
+                        usa el botón "Forzar Sorteo" en la página principal para ver si aparecen 
+                        correctamente en el anuncio de ganadores.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-600 mb-3">No hay números ganadores definidos</p>
+                    <p className="text-sm text-gray-500">
+                      Ejecuta un sorteo primero para poder generar tickets de prueba
+                    </p>
+                  </div>
+                )}
+              </div>
 
               <div className="text-center">
                 <button

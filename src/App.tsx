@@ -207,7 +207,7 @@ function App() {
       <EmojiChat />
       
       {/* Componente de diagnóstico de tickets */}
-      <TicketDiagnostic />
+      <TicketDiagnostic generateTicket={generateTicket} />
       
       {/* Componente de debug solo en desarrollo */}
       {import.meta.env.DEV && <DebugGameResults />}
