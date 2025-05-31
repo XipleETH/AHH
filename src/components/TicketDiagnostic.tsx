@@ -533,6 +533,63 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket, gam
     alert(`Ticket ${prizeType} creado y será ganador en 2 segundos!`);
   };
 
+  // FUNCIÓN DE EMERGENCIA - GARANTIZAR GANADORES DESDE BACKEND
+  const guaranteeWinnersFromBackend = async () => {
+    try {
+      console.log('🚨 Llamando función de emergencia del backend...');
+      
+      // Llamar la Cloud Function
+      const response = await fetch(`https://us-central1-lottomojifun.cloudfunctions.net/guaranteeWinners`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`✅ GANADORES GARANTIZADOS EXITOSAMENTE!\n\nResultado ID: ${result.resultId}\nGanadores creados:\n- Primer Premio: ${result.winnersCreated.firstPrize}\n- Segundo Premio: ${result.winnersCreated.secondPrize}\n- Tercer Premio: ${result.winnersCreated.thirdPrize}\n- Ticket Gratis: ${result.winnersCreated.freePrize}\n\n¡Verifica en la página principal!`);
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error llamando función de emergencia:', error);
+      alert('❌ Error llamando función de emergencia del backend');
+    }
+  };
+
+  // FUNCIÓN PARA LIMPIAR TICKETS ANTIGUOS
+  const cleanupOldTickets = async () => {
+    if (!confirm('¿Estás seguro de que quieres eliminar tickets de más de 7 días? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    
+    try {
+      console.log('🧹 Llamando función de limpieza...');
+      
+      const response = await fetch(`https://us-central1-lottomojifun.cloudfunctions.net/cleanupOldTickets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`✅ LIMPIEZA COMPLETADA!\n\nEliminados: ${result.deletedCount} tickets\nTotal antiguos encontrados: ${result.totalOldTickets}\n\nAhora tendrás mejores probabilidades de ganar.`);
+      } else {
+        alert(`❌ Error en limpieza: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error llamando función de limpieza:', error);
+      alert('❌ Error llamando función de limpieza del backend');
+    }
+  };
+
   if (!isOpen) {
     return (
       <button
@@ -830,29 +887,34 @@ const TicketDiagnostic: React.FC<TicketDiagnosticProps> = ({ generateTicket, gam
                 {/* Botón de Solución Rápida */}
                 <div className="mb-4 space-y-2">
                   <button
-                    onClick={forceWinnersNow}
+                    onClick={guaranteeWinnersFromBackend}
                     className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold text-lg"
                   >
-                    🚀 FORZAR GANADORES AHORA (GARANTIZADO)
+                    🚨 GARANTIZAR GANADORES (BACKEND)
                   </button>
                   <p className="text-xs text-gray-600 text-center">
-                    Convierte tus tickets existentes en ganadores inmediatamente
+                    Función de emergencia que convierte tickets recientes en ganadores garantizados
                   </p>
                   
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => createInstantWinner('first')}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded font-bold text-sm"
-                    >
-                      🏆 PRIMER PREMIO YA
-                    </button>
-                    <button
-                      onClick={() => createInstantWinner('second')}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded font-bold text-sm"
-                    >
-                      🥈 SEGUNDO PREMIO YA
-                    </button>
-                  </div>
+                  <button
+                    onClick={cleanupOldTickets}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold"
+                  >
+                    🧹 LIMPIAR TICKETS ANTIGUOS
+                  </button>
+                  <p className="text-xs text-gray-600 text-center">
+                    Elimina tickets de más de 7 días para mejorar las probabilidades
+                  </p>
+                  
+                  <button
+                    onClick={forceWinnersNow}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-bold text-lg"
+                  >
+                    🚀 FORZAR GANADORES FRONTEND
+                  </button>
+                  <p className="text-xs text-gray-600 text-center">
+                    Convierte tus tickets existentes en ganadores inmediatamente (solo visual)
+                  </p>
                 </div>
 
                 {/* Diagnóstico de Problemas */}

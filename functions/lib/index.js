@@ -1,104 +1,240 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.farcasterWebhook = void 0;
-const functions = require("firebase-functions");
+exports.triggerGameDraw = exports.scheduledGameDraw = void 0;
+const scheduler_1 = require("firebase-functions/v2/scheduler");
+const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 // Inicializar la aplicación de Firebase
 admin.initializeApp();
-// Webhook para procesar eventos de Farcaster
-exports.farcasterWebhook = functions.https.onRequest(async (req, res) => {
-    try {
-        // Verificar que es un POST
-        if (req.method !== 'POST') {
-            res.status(405).send('Method Not Allowed');
-            return;
+// Obtener una referencia a Firestore
+const db = admin.firestore();
+// Constantes
+const GAME_STATE_DOC = 'current_game_state';
+const TICKETS_COLLECTION = 'player_tickets';
+const GAME_RESULTS_COLLECTION = 'game_results';
+// Función para generar emojis aleatorios
+const generateRandomEmojis = (count) => {
+    const EMOJIS = ['🌟', '🎈', '🎨', '🌈', '🦄', '🍭', '🎪', '🎠', '🎡', '🎢',
+        '🌺', '🦋', '🐬', '🌸', '🍦', '🎵', '🎯', '🌴', '🎩', '🎭',
+        '🎁', '🎮', '🚀', '🌍', '🍀'];
+    const result = [];
+    for (let i = 0; i < count; i++) {
+        const randomIndex = Math.floor(Math.random() * EMOJIS.length);
+        result.push(EMOJIS[randomIndex]);
+    }
+    return result;
+};
+// Función para verificar si un ticket es ganador con los nuevos criterios
+const checkWin = (ticketNumbers, winningNumbers) => {
+    if (!ticketNumbers || !winningNumbers)
+        return {
+            firstPrize: false,
+            secondPrize: false,
+            thirdPrize: false,
+            freePrize: false
+        };
+    // LOG DETALLADO PARA DIAGNÓSTICO
+    console.log(`🔍 DIAGNÓSTICO CHECKWIN:`, {
+        ticketNumbers,
+        winningNumbers,
+        ticketLength: ticketNumbers.length,
+        winningLength: winningNumbers.length,
+        ticketType: typeof ticketNumbers,
+        winningType: typeof winningNumbers
+    });
+    // Verificar coincidencias exactas (mismo emoji en la misma posición)
+    let exactMatches = 0;
+    for (let i = 0; i < ticketNumbers.length; i++) {
+        if (i < winningNumbers.length && ticketNumbers[i] === winningNumbers[i]) {
+            exactMatches++;
+            console.log(`✅ Coincidencia exacta en posición ${i}: ${ticketNumbers[i]} === ${winningNumbers[i]}`);
         }
-        // Obtener y verificar el evento de Farcaster
-        const event = req.body;
-        console.log('Evento de Farcaster recibido:', event);
-        // Procesar diferentes tipos de eventos
-        if (event && event.type) {
-            switch (event.type) {
-                case 'APP_ADDED':
-                    // Un usuario ha añadido la aplicación
-                    await handleAppAdded(event.data);
-                    break;
-                case 'APP_REMOVED':
-                    // Un usuario ha eliminado la aplicación
-                    await handleAppRemoved(event.data);
-                    break;
-                case 'USER_INTERACTION':
-                    // Interacción de usuario (por ejemplo, clic en un botón)
-                    await handleUserInteraction(event.data);
-                    break;
-                case 'NOTIFICATION_SENT':
-                    // Notificación enviada
-                    console.log('Notificación enviada:', event.data);
-                    break;
-                default:
-                    console.log('Tipo de evento desconocido:', event.type);
+    }
+    // Para el segundo premio (ahora) y ticket gratis, necesitamos contar correctamente
+    // cuántos emojis del ticket coinciden con los del resultado ganador
+    // Crear copias para no modificar los originales
+    const ticketCopy = [...ticketNumbers];
+    const winningCopy = [...winningNumbers];
+    // Contar emojis que coinciden, teniendo en cuenta repeticiones
+    let matchCount = 0;
+    for (let i = 0; i < winningCopy.length; i++) {
+        const index = ticketCopy.indexOf(winningCopy[i]);
+        if (index !== -1) {
+            matchCount++;
+            console.log(`✅ Coincidencia en cualquier posición: ${winningCopy[i]} encontrado en ticket`);
+            // Eliminar el emoji ya contado para no contar repetidos
+            ticketCopy.splice(index, 1);
+        }
+    }
+    const result = {
+        // 4 aciertos en el mismo orden (premio mayor)
+        firstPrize: exactMatches === 4,
+        // 4 aciertos en cualquier orden (ahora segundo premio)
+        secondPrize: matchCount === 4 && exactMatches !== 4,
+        // 3 aciertos en orden exacto (ahora tercer premio)
+        thirdPrize: exactMatches === 3,
+        // 3 aciertos en cualquier orden (cuarto premio - ticket gratis)
+        freePrize: matchCount === 3 && exactMatches !== 3
+    };
+    console.log(`🏆 RESULTADO CHECKWIN:`, {
+        exactMatches,
+        matchCount,
+        result
+    });
+    return result;
+};
+// Función compartida para procesar el sorteo
+const processGameDraw = async () => {
+    const now = new Date();
+    const currentMinute = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+    const processId = Date.now().toString();
+    try {
+        console.log(`[${processId}] Procesando sorteo del juego para el minuto ${currentMinute}...`);
+        // 3. Generar números ganadores
+        const winningNumbers = generateRandomEmojis(4);
+        console.log(`[${processId}] Números ganadores generados:`, winningNumbers);
+        // 4. Calcular próximo sorteo
+        const nextMinute = new Date(now);
+        nextMinute.setMinutes(now.getMinutes() + 1);
+        nextMinute.setSeconds(0);
+        nextMinute.setMilliseconds(0);
+        // 5. Actualizar estado del juego
+        await db.collection('game_state').doc(GAME_STATE_DOC).set({
+            winningNumbers,
+            nextDrawTime: admin.firestore.Timestamp.fromDate(nextMinute),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+            lastProcessId: processId
+        });
+        // 6. Obtener tickets activos - TODOS PARA DIAGNÓSTICO
+        const ticketsSnapshot = await db.collection(TICKETS_COLLECTION).get();
+        const tickets = ticketsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        console.log(`[${processId}] Procesando ${tickets.length} tickets (TODOS para diagnóstico)`);
+        // 7. Comprobar ganadores con los nuevos criterios
+        const results = {
+            firstPrize: [],
+            secondPrize: [],
+            thirdPrize: [],
+            freePrize: []
+        };
+        // LOG DETALLADO DE TICKETS
+        console.log(`🎫 REVISANDO TICKETS:`, {
+            totalTickets: tickets.length,
+            winningNumbers,
+            firstFewTickets: tickets.slice(0, 3).map(t => ({
+                id: t.id,
+                numbers: t.numbers,
+                hasNumbers: !!t.numbers,
+                numbersLength: t.numbers?.length
+            }))
+        });
+        let checkedCount = 0;
+        tickets.forEach(ticket => {
+            if (!ticket?.numbers) {
+                console.log(`❌ Ticket ${ticket.id} sin números válidos`);
+                return;
             }
-        }
-        // Responder con éxito
-        res.status(200).json({ success: true });
+            checkedCount++;
+            const winStatus = checkWin(ticket.numbers, winningNumbers);
+            if (winStatus.firstPrize) {
+                results.firstPrize.push(ticket);
+                console.log(`🏆 PRIMER PREMIO ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+            }
+            else if (winStatus.secondPrize) {
+                results.secondPrize.push(ticket);
+                console.log(`🥈 SEGUNDO PREMIO ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+            }
+            else if (winStatus.thirdPrize) {
+                results.thirdPrize.push(ticket);
+                console.log(`🥉 TERCER PREMIO ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+            }
+            else if (winStatus.freePrize) {
+                results.freePrize.push(ticket);
+                console.log(`🎟️ TICKET GRATIS ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+            }
+        });
+        console.log(`📊 RESUMEN DE VERIFICACIÓN:`, {
+            ticketsChecked: checkedCount,
+            totalTickets: tickets.length,
+            firstPrize: results.firstPrize.length,
+            secondPrize: results.secondPrize.length,
+            thirdPrize: results.thirdPrize.length,
+            freePrize: results.freePrize.length
+        });
+        // 8. Guardar resultado
+        const gameResultId = Date.now().toString();
+        // Preparar datos serializables para Firestore
+        const serializableResult = {
+            id: gameResultId,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            dateTime: new Date().toISOString(),
+            winningNumbers,
+            processId: processId,
+            minuteKey: currentMinute,
+            firstPrize: results.firstPrize.map(ticket => ({
+                id: ticket.id,
+                ticketid: ticket.ticketid || ticket.id,
+                numbers: ticket.numbers,
+                timestamp: ticket.timestamp,
+                userId: ticket.userId || 'anonymous',
+                walletAddress: ticket.walletAddress || ticket.userId
+            })),
+            secondPrize: results.secondPrize.map(ticket => ({
+                id: ticket.id,
+                ticketid: ticket.ticketid || ticket.id,
+                numbers: ticket.numbers,
+                timestamp: ticket.timestamp,
+                userId: ticket.userId || 'anonymous',
+                walletAddress: ticket.walletAddress || ticket.userId
+            })),
+            thirdPrize: results.thirdPrize.map(ticket => ({
+                id: ticket.id,
+                ticketid: ticket.ticketid || ticket.id,
+                numbers: ticket.numbers,
+                timestamp: ticket.timestamp,
+                userId: ticket.userId || 'anonymous',
+                walletAddress: ticket.walletAddress || ticket.userId
+            })),
+            freePrize: results.freePrize.map(ticket => ({
+                id: ticket.id,
+                ticketid: ticket.ticketid || ticket.id,
+                numbers: ticket.numbers,
+                timestamp: ticket.timestamp,
+                userId: ticket.userId || 'anonymous',
+                walletAddress: ticket.walletAddress || ticket.userId
+            }))
+        };
+        // Guardar el resultado en Firestore
+        await db.collection(GAME_RESULTS_COLLECTION).doc(gameResultId).set(serializableResult);
+        console.log(`[${processId}] Sorteo procesado con éxito con ID:`, gameResultId);
+        return { success: true, resultId: gameResultId };
     }
     catch (error) {
-        console.error('Error procesando webhook:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        console.error(`[${processId}] Error procesando el sorteo:`, error);
+        return { success: false, error: error.message };
     }
+};
+// Función programada que se ejecuta cada minuto para realizar el sorteo automáticamente
+exports.scheduledGameDraw = (0, scheduler_1.onSchedule)({
+    schedule: "every 1 minutes",
+    timeZone: "America/Mexico_City",
+    retryConfig: {
+        maxRetryAttempts: 0,
+        minBackoffSeconds: 10
+    },
+    maxInstances: 1
+}, async (event) => {
+    const instanceId = Date.now().toString();
+    console.log(`[${instanceId}] Ejecutando sorteo programado`);
+    const result = await processGameDraw();
+    console.log(`[${instanceId}] Sorteo finalizado con éxito: ${result.success}`);
+    return null;
 });
-// Procesar evento APP_ADDED
-async function handleAppAdded(data) {
-    if (!data || !data.userId)
-        return;
-    try {
-        // Guardar datos del usuario que añadió la aplicación
-        const db = admin.firestore();
-        await db.collection('farcaster_users').doc(data.userId).set({
-            fid: data.userId,
-            added_at: admin.firestore.FieldValue.serverTimestamp(),
-            status: 'active'
-        }, { merge: true });
-        console.log(`Usuario ${data.userId} ha añadido la aplicación`);
-    }
-    catch (error) {
-        console.error('Error guardando datos de usuario:', error);
-    }
-}
-// Procesar evento APP_REMOVED
-async function handleAppRemoved(data) {
-    if (!data || !data.userId)
-        return;
-    try {
-        // Marcar usuario como inactivo
-        const db = admin.firestore();
-        await db.collection('farcaster_users').doc(data.userId).update({
-            status: 'inactive',
-            removed_at: admin.firestore.FieldValue.serverTimestamp()
-        });
-        console.log(`Usuario ${data.userId} ha eliminado la aplicación`);
-    }
-    catch (error) {
-        console.error('Error actualizando estado de usuario:', error);
-    }
-}
-// Procesar interacción de usuario
-async function handleUserInteraction(data) {
-    if (!data || !data.userId)
-        return;
-    try {
-        // Registrar la interacción
-        const db = admin.firestore();
-        await db.collection('farcaster_interactions').add({
-            fid: data.userId,
-            type: data.type || 'unknown',
-            data: data,
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
-        console.log(`Interacción registrada para usuario ${data.userId}`);
-    }
-    catch (error) {
-        console.error('Error registrando interacción:', error);
-    }
-}
+// Función Cloud que puede ser invocada manualmente (para pruebas o sorteos forzados)
+exports.triggerGameDraw = (0, https_1.onCall)(async (request) => {
+    console.log("Solicitud manual de sorteo recibida");
+    return await processGameDraw();
+});
 //# sourceMappingURL=index.js.map

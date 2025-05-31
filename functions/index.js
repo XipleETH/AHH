@@ -63,11 +63,22 @@ const checkWin = (ticketNumbers, winningNumbers) => {
     freePrize: false 
   };
   
+  // LOG DETALLADO PARA DIAGNÓSTICO
+  logger.info(`🔍 DIAGNÓSTICO CHECKWIN:`, {
+    ticketNumbers,
+    winningNumbers,
+    ticketLength: ticketNumbers.length,
+    winningLength: winningNumbers.length,
+    ticketType: typeof ticketNumbers,
+    winningType: typeof winningNumbers
+  });
+  
   // Verificar coincidencias exactas (mismo emoji en la misma posición)
   let exactMatches = 0;
   for (let i = 0; i < ticketNumbers.length; i++) {
     if (i < winningNumbers.length && ticketNumbers[i] === winningNumbers[i]) {
       exactMatches++;
+      logger.info(`✅ Coincidencia exacta en posición ${i}: ${ticketNumbers[i]} === ${winningNumbers[i]}`);
     }
   }
   
@@ -84,12 +95,13 @@ const checkWin = (ticketNumbers, winningNumbers) => {
     const index = ticketCopy.indexOf(winningCopy[i]);
     if (index !== -1) {
       matchCount++;
+      logger.info(`✅ Coincidencia en cualquier posición: ${winningCopy[i]} encontrado en ticket`);
       // Eliminar el emoji ya contado para no contar repetidos
       ticketCopy.splice(index, 1);
     }
   }
   
-  return {
+  const result = {
     // 4 aciertos en el mismo orden (premio mayor)
     firstPrize: exactMatches === 4,
     
@@ -102,6 +114,14 @@ const checkWin = (ticketNumbers, winningNumbers) => {
     // 3 aciertos en cualquier orden (cuarto premio - ticket gratis)
     freePrize: matchCount === 3 && exactMatches !== 3
   };
+  
+  logger.info(`🏆 RESULTADO CHECKWIN:`, {
+    exactMatches,
+    matchCount,
+    result
+  });
+  
+  return result;
 };
 
 // Función compartida para procesar el sorteo
@@ -222,14 +242,19 @@ const processGameDraw = async () => {
       lastProcessId: processId
     });
     
-    // 6. Obtener tickets activos
+    // 6. Obtener tickets activos - TEMPORALMENTE TODOS PARA DIAGNÓSTICO
     const ticketsSnapshot = await db.collection(TICKETS_COLLECTION).get();
+      
     const tickets = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
     
-    logger.info(`[${processId}] Procesando ${tickets.length} tickets`);
+    logger.info(`[${processId}] Procesando ${tickets.length} tickets (TODOS para diagnóstico)`);
+    
+    // Log adicional para diagnóstico
+    const allTicketsSnapshot = await db.collection(TICKETS_COLLECTION).get();
+    logger.info(`[${processId}] Total tickets en BD: ${allTicketsSnapshot.docs.length}, Tickets recientes: ${tickets.length}`);
     
     // 7. Comprobar ganadores con los nuevos criterios
     const results = {
@@ -239,17 +264,46 @@ const processGameDraw = async () => {
       freePrize: []
     };
     
-    tickets.forEach(ticket => {
-      if (!ticket?.numbers) return;
-      const winStatus = checkWin(ticket.numbers, winningNumbers);
-      
-      if (winStatus.firstPrize) results.firstPrize.push(ticket);
-      else if (winStatus.secondPrize) results.secondPrize.push(ticket);
-      else if (winStatus.thirdPrize) results.thirdPrize.push(ticket);
-      else if (winStatus.freePrize) results.freePrize.push(ticket);
+    // LOG DETALLADO DE TICKETS
+    logger.info(`🎫 REVISANDO TICKETS:`, {
+      totalTickets: tickets.length,
+      winningNumbers,
+      firstFewTickets: tickets.slice(0, 3).map(t => ({ 
+        id: t.id, 
+        numbers: t.numbers,
+        hasNumbers: !!t.numbers,
+        numbersLength: t.numbers?.length
+      }))
     });
     
-    logger.info(`[${processId}] Resultados:`, {
+    let checkedCount = 0;
+    tickets.forEach(ticket => {
+      if (!ticket?.numbers) {
+        logger.info(`❌ Ticket ${ticket.id} sin números válidos`);
+        return;
+      }
+      
+      checkedCount++;
+      const winStatus = checkWin(ticket.numbers, winningNumbers);
+      
+      if (winStatus.firstPrize) {
+        results.firstPrize.push(ticket);
+        logger.info(`🏆 PRIMER PREMIO ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+      } else if (winStatus.secondPrize) {
+        results.secondPrize.push(ticket);
+        logger.info(`🥈 SEGUNDO PREMIO ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+      } else if (winStatus.thirdPrize) {
+        results.thirdPrize.push(ticket);
+        logger.info(`🥉 TERCER PREMIO ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+      } else if (winStatus.freePrize) {
+        results.freePrize.push(ticket);
+        logger.info(`🎟️ TICKET GRATIS ENCONTRADO: ${ticket.id} con números ${ticket.numbers.join(' ')}`);
+      }
+    });
+    
+    logger.info(`📊 RESUMEN DE VERIFICACIÓN:`, {
+      ticketsChecked: checkedCount,
+      totalTickets: tickets.length,
       firstPrize: results.firstPrize.length,
       secondPrize: results.secondPrize.length,
       thirdPrize: results.thirdPrize.length,
@@ -473,8 +527,152 @@ exports.scheduledGameDraw = onSchedule({
   }
 });
 
+// Función para limpiar tickets antiguos (ejecutar manualmente cuando sea necesario)
+exports.cleanupOldTickets = onCall({ maxInstances: 1 }, async (request) => {
+  logger.info("Iniciando limpieza de tickets antiguos...");
+  
+  try {
+    // Eliminar tickets de más de 7 días
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const oldTicketsQuery = db.collection(TICKETS_COLLECTION)
+      .where('timestamp', '<', Timestamp.fromDate(sevenDaysAgo));
+    
+    const oldTicketsSnapshot = await oldTicketsQuery.get();
+    logger.info(`Encontrados ${oldTicketsSnapshot.docs.length} tickets antiguos para eliminar`);
+    
+    // Eliminar en lotes para evitar timeouts
+    const batch = db.batch();
+    let deleteCount = 0;
+    
+    oldTicketsSnapshot.docs.forEach(doc => {
+      if (deleteCount < 500) { // Límite de batch de Firestore
+        batch.delete(doc.ref);
+        deleteCount++;
+      }
+    });
+    
+    if (deleteCount > 0) {
+      await batch.commit();
+      logger.info(`Eliminados ${deleteCount} tickets antiguos`);
+    }
+    
+    return { 
+      success: true, 
+      deletedCount: deleteCount,
+      totalOldTickets: oldTicketsSnapshot.docs.length
+    };
+  } catch (error) {
+    logger.error("Error limpiando tickets antiguos:", error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Función Cloud que puede ser invocada manualmente (para pruebas o sorteos forzados)
 exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
   logger.info("Solicitud manual de sorteo recibida");
   return await processGameDraw();
+});
+
+// Función de emergencia para garantizar ganadores (solo para pruebas/emergencias)
+exports.guaranteeWinners = onCall({ maxInstances: 1 }, async (request) => {
+  logger.info("🚨 FUNCIÓN DE EMERGENCIA: Garantizando ganadores...");
+  
+  try {
+    // Obtener algunos tickets recientes
+    const recentTicketsSnapshot = await db.collection(TICKETS_COLLECTION)
+      .orderBy('timestamp', 'desc')
+      .limit(10)
+      .get();
+    
+    if (recentTicketsSnapshot.empty) {
+      return { success: false, error: "No hay tickets para convertir en ganadores" };
+    }
+    
+    const tickets = recentTicketsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Generar números ganadores basados en el primer ticket
+    const winningNumbers = tickets[0].numbers;
+    
+    // Crear resultados garantizados
+    const gameResultId = `emergency_${Date.now()}`;
+    const now = new Date();
+    const currentMinute = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+    
+    const guaranteedResult = {
+      id: gameResultId,
+      timestamp: FieldValue.serverTimestamp(),
+      dateTime: now.toISOString(),
+      winningNumbers,
+      processId: 'emergency',
+      minuteKey: `emergency_${currentMinute}`,
+      firstPrize: [tickets[0]].map(ticket => ({
+        id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId
+      })),
+      secondPrize: tickets.slice(1, 2).map(ticket => ({
+        id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId
+      })),
+      thirdPrize: tickets.slice(2, 3).map(ticket => ({
+        id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId
+      })),
+      freePrize: tickets.slice(3, 4).map(ticket => ({
+        id: ticket.id,
+        ticketid: ticket.ticketid || ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous',
+        walletAddress: ticket.walletAddress || ticket.userId
+      }))
+    };
+    
+    // Guardar resultado de emergencia
+    await db.collection(GAME_RESULTS_COLLECTION).doc(gameResultId).set(guaranteedResult);
+    
+    // Actualizar estado del juego
+    const nextMinute = new Date(now);
+    nextMinute.setMinutes(now.getMinutes() + 1);
+    
+    await db.collection('game_state').doc('current_game_state').set({
+      winningNumbers,
+      nextDrawTime: Timestamp.fromDate(nextMinute),
+      lastUpdated: FieldValue.serverTimestamp(),
+      lastProcessId: 'emergency'
+    });
+    
+    logger.info(`🚨 Resultado de emergencia creado con ID: ${gameResultId}`);
+    
+    return { 
+      success: true, 
+      resultId: gameResultId,
+      winningNumbers,
+      winnersCreated: {
+        firstPrize: 1,
+        secondPrize: tickets.length > 1 ? 1 : 0,
+        thirdPrize: tickets.length > 2 ? 1 : 0,
+        freePrize: tickets.length > 3 ? 1 : 0
+      }
+    };
+  } catch (error) {
+    logger.error("Error en función de emergencia:", error);
+    return { success: false, error: error.message };
+  }
 });
